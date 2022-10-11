@@ -331,3 +331,164 @@ class RelError(pyca.StoppingCriterion):
     def clear(self):
         self._val = np.r_[0]
         self._x_prev = None
+
+
+class StopCriterion_LSQMR(pycs.StoppingCriterion):
+    r"""
+    Stop iterative solver of :py:class:`pycsou.opt.solver.lsqr.LSQR` or :py:class:`pycsou.opt.solver.lsmr.LSMR` after
+    certain customized conditions reach.
+
+    **Stopping Tests:**
+
+    **1.** Iteration number reach `max_iter` before other stopping conditions is satisfied.
+
+    **2.** When `x` is an approximate solution to `A@x = B`, according to `atol` and `btol`.
+
+    **3.** When `x` approximately solves the least-squares problem according to `atol`.
+
+    **4.** When :math:`\text{cond}(A)` is greater than :math:`\text{conlim}`.
+
+    **5.** Same as **2** with :math:`\text{atol} = \text{btol} = \text{eps}` (machine precision)
+
+    **6.** Same as **3** with :math:`\text{atol} = \text{eps}`.
+
+    **7.** Same as **4** with :math:`\text{conlim} = 1/\text{eps}`.
+    """
+
+    def __init__(
+        self,
+        method: str,
+        atol: float,
+        ctol: float,
+        itn: int,
+        iter_lim: int,
+    ):
+        """
+        Parameters
+        ----------
+        method: str
+            Solver method. Either "lsqr" or "lsmr", otherwise raises error.
+        atol, ctol: float
+            Stopping tolerances.
+        itn: int
+            Iteration number.
+        iter_lim: int
+            Iteration limit.
+        """
+        self._method = method
+        self._atol, self._ctol = atol, ctol
+        self._itn, self._iter_lim = itn, iter_lim
+        self._istop = None
+        self._x0 = self._test1 = self._test2 = None
+        self._normA = self._condA = None
+        if self._method == "lsqr":
+            self._normr1 = self._normr2 = None
+        elif self._method == "lsmr":
+            self._normr = self._normar = None
+        else:
+            raise ValueError(f"method: expected 'lsqr' or 'lsmr', got {method}.")
+
+    def stop(self, state: cabc.Mapping) -> bool:
+
+        # Check if there's a trivial solution
+        if state["trivial"].all():
+            return True
+
+        # Update parameters here to update info:
+        self._x0, self._test1, self._test2 = state["x"][0], state["test1"], state["test2"]
+        self._normA = state["normA"]
+        self._condA = state["condA"]
+
+        # Parameters specific to lsqr/lsmr
+        if self._method == "lsqr":
+            self._normr1, self._normr2 = state["normr1"], state["normr2"]
+        else:
+            self._normr, self._normar = state["normr"], state["normar"]
+
+        # If iteration number is 0:
+        if self._itn == 0:
+            self._itn += 1
+            return False
+        else:
+            try:
+                self._x0 = self._x0[0]
+            except:
+                pass
+
+        # Parameters to test stopping criterions
+        test1, test2, test3 = state["test1"], state["test2"], state["test3"]
+        t1, rtol = state["t1"], state["rtol"]
+
+        # Update self._istop
+        self._istop = -np.ones_like(test1)
+
+        # Applying tests:
+        if self._itn >= self._iter_lim:
+            self._istop[:] = 7
+        self._istop[1 + test3 <= 1] = 6
+        self._istop[test3 <= self._ctol] = 3
+        self._istop[1 + test2 <= 1] = 5
+        self._istop[test2 <= self._atol] = 2
+        self._istop[test1 <= rtol] = 1
+        self._istop[1 + t1 <= 1] = 4
+
+        self._itn += 1
+
+        # Getting and returning decision:
+        decision = True if (self._istop != -1).all() else False
+        if decision:
+            # If there's any trivial solution, add the trivial solution to the solution
+            if state["trivial"].any():
+                xp = pycu.get_array_module(state["x"])
+                temp_x = state["x"]
+                state["x"] = xp.zeros((*state["trivial"].squeeze().shape, state["x"].shape[-1]))
+                state["x"][xp.invert(state["trivial"].squeeze())] = temp_x
+        return decision
+
+    def info(self) -> cabc.Mapping[str, float]:
+        r"""
+        **Information given at each iterations:**
+
+        * **x[0] (for first data):** First element of first input data.
+
+        * **norm r1 or norm r:** `norm(b-Ax)` for both methods, "lsqr" and "lsmr".
+
+        * **norm r2 or norm Ar:** `sqrt(norm(r)^2 + damp^2 * norm(x-x0)^2)` or `norm(A^H (b - Ax))`, respectively. The former is given if the method is "lsqr", while the latter is given if the method is "lsmr".
+
+        * **Compatible:** Test1 score, which is calculated to measure how close `x` is an approximated as a solution to `A@x = B`, according to `atol` and `btol`.
+
+        * **LS:** Test2 score, which is calculated to measure how close `x` is approximated as a solution to the least-squares problem according to `atol`.
+
+        * **Norm A:** Estimate of `norm(A)`.
+
+        * **Cond A:** Estimate of `cond(A)`.
+
+        Notes
+        -----
+
+        * In case of multiple inputs in parallel, information of only the first input is given for the clear visualization purpose.
+
+        """
+
+        if self._method == "lsqr":
+            data = {
+                f"x[0]": self._x0.ravel()[0],
+                f"norm r1": self._normr1.ravel()[0],
+                f"norm r2": self._normr2.ravel()[0],
+                f"Compatible": self._test1.ravel()[0],
+                f"LS": self._test2.ravel()[0],
+                f"Norm A": self._normA.ravel()[0],
+                f"Cond A": self._condA.ravel()[0],
+            }
+        elif self._method == "lsmr":
+            data = {
+                f"x[0]": self._x0.ravel()[0],
+                f"norm r": self._normr.ravel()[0],
+                f"norm Ar": self._normar.ravel()[0],
+                f"Compatible": self._test1.ravel()[0],
+                f"LS": self._test2.ravel()[0],
+                f"Norm A": self._normA.ravel()[0],
+                f"Cond A": self._condA.ravel()[0],
+            }
+
+        return data
