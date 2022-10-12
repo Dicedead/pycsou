@@ -131,7 +131,7 @@ class LSMR(pycs.Solver):
             mask = xp.invert(mst["trivial"]).squeeze()
             b = b[mask]
 
-        u = b
+        u = b.copy()
         normb = xp.linalg.norm(b, axis=-1, keepdims=True)
 
         if x0 is None:
@@ -207,7 +207,8 @@ class LSMR(pycs.Solver):
                 v *= 1 / alpha
 
         # Construct rotation:
-        chat, shat, alphahat = self._sym_ortho_func(alphabar, self._damp, xp)
+        _damp = xp.ones_like(alphabar) * self._damp
+        chat, shat, alphahat = self._sym_ortho_func(alphabar, _damp, xp)
 
         # Use a plane rotation to turn B_i to R_i:
         rhoold = rho

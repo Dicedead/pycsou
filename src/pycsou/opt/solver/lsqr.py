@@ -138,7 +138,7 @@ class LSQR(pycs.Solver):
             mask = xp.invert(mst["trivial"]).squeeze()
             b = b[mask]
 
-        u = b
+        u = b.copy()
         bnorm = xp.linalg.norm(b, axis=-1, keepdims=True)
 
         if x0 is None:
@@ -224,7 +224,7 @@ class LSQR(pycs.Solver):
         mst["alpha"], mst["rhobar"], mst["phibar"] = alpha, rhobar, phibar
 
         # Estimation of norms:
-        ddnorm = ddnorm + xp.linalg.norm(dk) ** 2
+        ddnorm = ddnorm + xp.linalg.norm(dk, axis=-1, keepdims=True) ** 2
         delta = sn2 * rho
         gambar = -cs2 * rho
         rhs = phi - delta * z
