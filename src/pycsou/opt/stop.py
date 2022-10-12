@@ -333,7 +333,7 @@ class RelError(pyca.StoppingCriterion):
         self._x_prev = None
 
 
-class StopCriterion_LSQMR(pycs.StoppingCriterion):
+class StopCriterion_LSQMR(pyca.StoppingCriterion):
     r"""
     Stop iterative solver of :py:class:`pycsou.opt.solver.lsqr.LSQR` or :py:class:`pycsou.opt.solver.lsmr.LSMR` after
     certain customized conditions reach.
