@@ -472,23 +472,23 @@ class StopCriterion_LSQMR(pycs.StoppingCriterion):
 
         if self._method == "lsqr":
             data = {
-                f"x[0]": self._x0.ravel()[0],
-                f"norm r1": self._normr1.ravel()[0],
-                f"norm r2": self._normr2.ravel()[0],
-                f"Compatible": self._test1.ravel()[0],
-                f"LS": self._test2.ravel()[0],
-                f"Norm A": self._normA.ravel()[0],
-                f"Cond A": self._condA.ravel()[0],
+                f"x[0]": float(self._x0.ravel()[0]),
+                f"norm r1": float(self._normr1.max()),
+                f"norm r2": float(self._normr2.max()),
+                f"Compatible": float(self._test1.max()),
+                f"LS": float(self._test2.max()),
+                f"Norm A": float(self._normA.max()),
+                f"Cond A": float(self._condA.max()),
             }
         elif self._method == "lsmr":
             data = {
-                f"x[0]": self._x0.ravel()[0],
-                f"norm r": self._normr.ravel()[0],
-                f"norm Ar": self._normar.ravel()[0],
-                f"Compatible": self._test1.ravel()[0],
-                f"LS": self._test2.ravel()[0],
-                f"Norm A": self._normA.ravel()[0],
-                f"Cond A": self._condA.ravel()[0],
+                f"x[0]": float(self._x0.ravel()[0]),
+                f"norm r": float(self._normr.max()),
+                f"norm Ar": float(self._normar.max()),
+                f"Compatible": float(self._test1.max()),
+                f"LS": float(self._test2.max()),
+                f"Norm A": float(self._normA.max()),
+                f"Cond A": float(self._condA.max()),
             }
 
         return data
