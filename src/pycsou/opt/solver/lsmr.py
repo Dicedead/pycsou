@@ -179,28 +179,7 @@ class LSMR(pycs.Solver):
         mst["test1"], mst["test2"], mst["test3"] = xp.ones_like(beta), alpha / beta, None
 
         # Vectorize the function of Givens rotation
-        self._sym_ortho_func = xp.vectorize(self._sym_ortho)
-
-    @staticmethod
-    def _sym_ortho(a, b, xp):
-        """
-        Stable implementation of Givens rotation.
-        """
-        if b == 0:
-            return xp.sign(a), 0, xp.abs(a)
-        elif a == 0:
-            return 0, xp.sign(b), xp.abs(b)
-        elif xp.abs(b) > xp.abs(a):
-            tau = a / b
-            s = xp.sign(b) / xp.sqrt(1 + tau**2)
-            c = s * tau
-            r = b / s
-        else:
-            tau = b / a
-            c = xp.sign(a) / xp.sqrt(1 + tau**2)
-            s = c * tau
-            r = a / c
-        return c, s, r
+        self._sym_ortho_func = _sym_ortho_vec
 
     def m_step(self):
 
@@ -327,3 +306,92 @@ class LSMR(pycs.Solver):
         """
         data, _ = self.stats()
         return data.get("x")
+
+
+def _sym_ortho_vec_dask(a, b, xp):
+    """
+    Stable implementation of Givens rotation for Dask arrays. s
+    """
+
+    cond0 = (b == 0).compute_chunk_sizes()
+    cond1 = xp.logical_and(a == 0, xp.logical_not(cond0)).compute_chunk_sizes()
+    cond01 = xp.logical_or(cond1, cond0).compute_chunk_sizes()
+    cond2 = xp.logical_and(xp.abs(b) > xp.abs(a), xp.logical_not(cond01)).compute_chunk_sizes()
+    cond3 = xp.logical_not(xp.logical_or(cond01, cond2)).compute_chunk_sizes()
+
+    tau1 = xp.divide(a, b, where=xp.logical_not(cond01))
+    tau2 = xp.divide(b, a, where=xp.logical_not(cond01))
+    s_cond2 = xp.sign(b) / xp.sqrt(1 + tau1 * tau1)
+    c_cond3 = xp.sign(a) / xp.sqrt(1 + tau2 * tau2)
+
+    c = xp.sign(a) * cond0 + s_cond2 * tau1 * cond2 + c_cond3 * cond3
+
+    s = xp.sign(b) * cond1 + s_cond2 * cond2 + c_cond3 * tau2 * cond3
+
+    r = (
+        xp.abs(a) * cond0
+        + xp.abs(b) * cond1
+        + xp.divide(b, s_cond2, where=cond2) * cond2
+        + xp.divide(a, c_cond3, where=cond3) * cond3
+    )
+
+    return c, s, r
+
+
+@pycu.redirect("a", DASK=_sym_ortho_vec_dask)
+def _sym_ortho_vec(a, b, xp):
+    """
+    Stable implementation of Givens rotation.
+    A vectorized implementation of the following code:
+
+        if b == 0:
+            c = xp.sign(a)
+            s = 0
+            r = xp.abs(a)
+        elif a == 0:
+            c = 0
+            s = xp.sign(b)
+            r = xp.abs(b)
+        elif xp.abs(b) > xp.abs(a):
+            tau = a / b
+            s = xp.sign(b) / xp.sqrt(1 + tau * tau)
+            c = s * tau
+            r = b / s
+        else:
+            tau = b / a
+            c = xp.sign(a) / xp.sqrt(1 + tau * tau)
+            s = c * tau
+            r = a / c
+    """
+
+    c = xp.zeros_like(a)
+    s = xp.zeros_like(a)
+    r = xp.zeros_like(a)
+
+    cond0 = b == 0
+    cond1 = xp.logical_and(a == 0, xp.logical_not(cond0))
+    cond01 = xp.logical_or(cond1, cond0)
+    cond2 = xp.logical_and(xp.abs(b) > xp.abs(a), xp.logical_not(cond01))
+    cond3 = xp.logical_not(xp.logical_or(cond01, cond2))
+
+    tau2 = xp.divide(a[cond2], b[cond2])
+    tau3 = xp.divide(b[cond3], a[cond3])
+
+    c[cond0] += xp.sign(a[cond0])
+    r[cond0] += xp.abs(a[cond0])
+    s[cond1] += xp.sign(b[cond1])
+    r[cond1] += xp.abs(b[cond1])
+    s[cond2] += xp.sign(b[cond2])
+    s[cond2] /= xp.sqrt(1 + tau2 * tau2)
+    c[cond2] += s[cond2]
+    c[cond2] *= tau2
+    r[cond2] += b[cond2]
+    r[cond2] /= s[cond2]
+    c[cond3] += xp.sign(a[cond3])
+    c[cond3] /= xp.sqrt(1 + tau3 * tau3)
+    s[cond3] += c[cond3]
+    s[cond3] *= tau3
+    r[cond3] += a[cond3]
+    r[cond3] /= c[cond3]
+
+    return c, s, r
