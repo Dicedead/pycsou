@@ -12,6 +12,14 @@ pycsou.util.deps module
    :undoc-members:
    :show-inheritance:
 
+pycsou.util.misc module
+-----------------------
+
+.. automodule:: pycsou.util.misc
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 pycsou.util.ptype module
 ------------------------
 

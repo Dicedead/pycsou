@@ -20,6 +20,14 @@ pycsou.operator.linop.base module
    :undoc-members:
    :show-inheritance:
 
+pycsou.operator.linop.diff module
+---------------------------------
+
+.. automodule:: pycsou.operator.linop.diff
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 pycsou.operator.linop.kron module
 ---------------------------------
 
