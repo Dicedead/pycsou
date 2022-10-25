@@ -780,13 +780,34 @@ class Stencil(pyco.SquareOp):
         """
         xp = pycu.get_array_module(arr)
         arr = arr.reshape(-1, *self.arg_shape)
-        for i in range(1, len(self.pad_widths[direction])):
-            padding_kwargs = {key: value[i] for key, value in self._padding_kwargs.items()}
-            _pad_width = tuple(
-                [(0, 0) if i != j else self.pad_widths[direction][i] for j in range(len(self.pad_widths[direction]))]
-            )
-            arr = xp.pad(array=arr, pad_width=_pad_width, **padding_kwargs)
+        if len(set(self._padding_kwargs["mode"].values())) == 1:
+            # if there is only one boundary mode, pad only once.
+            padding_kwargs = self._get_padding(1)
+            arr = xp.pad(array=arr, pad_width=self.pad_widths[direction], **padding_kwargs)
+        else:
+            # else pad once per dimension:
+            for i in range(1, len(self.pad_widths[direction])):
+                padding_kwargs = self._get_padding(i)
+                _pad_width = tuple(
+                    [
+                        (0, 0) if i != j else self.pad_widths[direction][i]
+                        for j in range(len(self.pad_widths[direction]))
+                    ]
+                )
+                arr = xp.pad(array=arr, pad_width=_pad_width, **padding_kwargs)
         return arr
+
+    def _get_padding(self, dim):
+        """
+        return padding kwargs for given dimension ``dim``.
+        """
+        padding_kwargs = dict()
+        for key, value in self._padding_kwargs.items():
+            try:
+                padding_kwargs[key] = value[dim]
+            except:
+                pass
+        return padding_kwargs
 
     def _sanitize_inputs(self, stencil_coefs: pyct.NDArray, center: pyct.NDArray, boundary):
         r"""
