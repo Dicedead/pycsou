@@ -819,7 +819,8 @@ class Stencil(pyco.SquareOp):
         if isinstance(boundary, tuple):
             boundary = dict(zip(range(ndim + 1), boundary))
         if isinstance(boundary, dict):
-            boundary = {ax: boundary.get(ax, default) for ax in range(ndim + 1)}
+            boundary = {ax + 1: boundary.get(ax, default) for ax in range(ndim)}
+            boundary[0] = boundary[1]
 
         mode = dict()
         cval = dict()
