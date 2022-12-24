@@ -1236,7 +1236,7 @@ class ChainRule(Rule):
             if data is None:
                 op = self
             else:
-                op_lhs = self._lhs.asloss(data=data)
+                op_lhs = self._lhs.asloss(data=self._rhs.apply(data))
                 op = op_lhs * self._rhs
             return op
         else:
