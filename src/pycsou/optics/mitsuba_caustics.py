@@ -7,6 +7,8 @@ import mitsuba as mi
 import pycsou.abc as pyca
 import pycsou.util.ptype as pyct
 
+__all__ = ["MitsubaCausticsOptWrapper"]
+
 
 class MitsubaCausticsOptWrapper(pyca.DiffFunc):
     def __init__(
