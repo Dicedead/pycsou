@@ -10,13 +10,7 @@ import pycsou.util.ptype as pyct
 
 class MitsubaLossWrapper(pyca.DiffFunc):
     def __init__(
-        self,
-        scene,
-        target,
-        heightmap_shape,
-        loss_func,
-        spp=128,
-        initial_heightmap=None,
+        self, scene, target, heightmap_shape, loss_func, spp=128, initial_heightmap=None, mitsuba_variant="cuda_ad_rgb"
     ):
         heightmap_size = functools.reduce(lambda x, y: x * y, heightmap_shape, 1)
         super().__init__(shape=(1, heightmap_size))
@@ -49,6 +43,8 @@ class MitsubaLossWrapper(pyca.DiffFunc):
 
         self.__it = 0
         self.__last_image = mi.render(self.__scene, self.__params, seed=0, spp=2 * self.__spp, spp_grad=self.__spp)
+        self.__mitsuba_init = False
+        self.__mi_variant = mitsuba_variant
 
     def __apply_displacement(self, amplitude=1.0):
         # Enforce reasonable range. For reference, the receiving plane
@@ -63,11 +59,14 @@ class MitsubaLossWrapper(pyca.DiffFunc):
         self.__params_scene.update()
 
     def grad(self, arr: pyct.NDArray) -> pyct.NDArray:
+        self.__init_mitsuba()
         loss = self.apply(arr)
         dr.backward(loss)
         return dr.grad(self.__params["data"]).numpy().flatten()
 
     def apply(self, arr: pyct.NDArray, seed=None) -> pyct.NDArray:
+        self.__init_mitsuba()
+
         self.__it += 1
         if seed is None:
             seed = self.__it
@@ -77,7 +76,10 @@ class MitsubaLossWrapper(pyca.DiffFunc):
         self.__last_image = mi.render(self.__scene, self.__params, seed=seed, spp=2 * self.__spp, spp_grad=self.__spp)
         return self.__loss(self.__last_image, self.__target)
 
-    def get_last_image(self):
+    def get_curr_heightmap(self):
+        return self.__params["data"].numpy().flatten()
+
+    def get_curr_image(self):
         return self.__last_image
 
     def asloss(self, data: pyct.NDArray = None) -> pyct.OpT:
@@ -91,3 +93,8 @@ class MitsubaLossWrapper(pyca.DiffFunc):
 
     def diff_lipschitz(self, **kwargs) -> pyct.Real:
         return np.infty
+
+    def __init_mitsuba(self):
+        if not self.__mitsuba_init:
+            mi.set_variant(self.__mi_variant)
+            self.__mitsuba_init = True
