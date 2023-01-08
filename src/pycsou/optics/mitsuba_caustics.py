@@ -8,7 +8,7 @@ import pycsou.abc as pyca
 import pycsou.util.ptype as pyct
 
 
-class MitsubaLossWrapper(pyca.DiffFunc):
+class MitsubaCausticsOptWrapper(pyca.DiffFunc):
     def __init__(
         self, scene, target, heightmap_shape, loss_func, spp=128, initial_heightmap=None, mitsuba_variant="cuda_ad_rgb"
     ):
@@ -46,7 +46,7 @@ class MitsubaLossWrapper(pyca.DiffFunc):
         self.__mitsuba_init = False
         self.__mi_variant = mitsuba_variant
 
-    def __apply_displacement(self, amplitude=1.0):
+    def apply_displacement(self, amplitude=1.0):
         # Enforce reasonable range. For reference, the receiving plane
         # is 7 scene units away from the lens.
         vmax = 1 / 100.0
@@ -72,12 +72,15 @@ class MitsubaLossWrapper(pyca.DiffFunc):
             seed = self.__it
 
         self.__params.update({"data": mi.TensorXf(array=arr, shape=self.__heightmap_shape)})
-        self.__apply_displacement()
+        self.apply_displacement()
         self.__last_image = mi.render(self.__scene, self.__params, seed=seed, spp=2 * self.__spp, spp_grad=self.__spp)
         return self.__loss(self.__last_image, self.__target)
 
-    def get_curr_heightmap(self):
-        return self.__params["data"].numpy().flatten()
+    def get_np_heightmap(self):
+        return self.__params["data"].numpy()
+
+    def get_mi_heightmap(self):
+        return self.__params["data"]
 
     def get_curr_image(self):
         return self.__last_image
