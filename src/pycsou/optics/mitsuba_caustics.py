@@ -60,13 +60,13 @@ class MitsubaCausticsOptWrapper(pyca.DiffFunc):
         self.__params_scene["lens.vertex_positions"] = dr.ravel(new_positions)
         self.__params_scene.update()
 
-    def grad(self, arr: pyct.NDArray) -> pyct.NDArray:
+    def grad(self, arr: pyct.NDArray, seed=None) -> pyct.NDArray:
         self.__init_mitsuba()
-        loss = self.apply(arr)
+        loss = self.apply(arr, seed=seed, mitsuba_type=True)
         dr.backward(loss)
         return dr.grad(self.__params["data"]).numpy().flatten()
 
-    def apply(self, arr: pyct.NDArray, seed=None) -> pyct.NDArray:
+    def apply(self, arr: pyct.NDArray, seed=None, mitsuba_type=False) -> pyct.NDArray:
         self.__init_mitsuba()
 
         self.__it += 1
@@ -76,7 +76,8 @@ class MitsubaCausticsOptWrapper(pyca.DiffFunc):
         self.__params.update({"data": mi.TensorXf(array=arr, shape=self.__heightmap_shape)})
         self.apply_displacement()
         self.__last_image = mi.render(self.__scene, self.__params, seed=seed, spp=2 * self.__spp, spp_grad=self.__spp)
-        return self.__loss(self.__last_image, self.__target)
+        loss = self.__loss(self.__last_image, self.__target)
+        return loss if mitsuba_type else loss.numpy()
 
     def get_np_heightmap(self):
         return self.__params["data"].numpy()
