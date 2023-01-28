@@ -249,9 +249,12 @@ prox_ad = pyopt.ProxAdam(miloss)
 prox_ad.fit(
     x0=miloss.get_np_heightmap().flatten(),
     a=3e-05,
-    stop_crit=pyst.MaxIter(1000),
-    stop_crit_sub=prox_ad.default_stop_crit(),
+    stop_crit=pyst.RelError(eps=8.5e-3),
 )
+
+data, history = prox_ad.stats()
+plt.semilogy(history["RelError[x]"])
+plt.show()
 
 final_heightmap = prox_ad.solution()
 miloss.apply(final_heightmap)
