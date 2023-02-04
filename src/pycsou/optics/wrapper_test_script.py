@@ -2,6 +2,8 @@
 # IMPORTS
 #################################################################################################
 
+import numpy as np
+
 import mitsuba as mi
 
 mi.set_variant("cuda_ad_rgb")
@@ -103,8 +105,8 @@ CONFIGS = {
 }
 
 # Pick one of the available configs
-config_name = "sunday"
-# config_name = 'wave'
+# config_name = "sunday"
+config_name = "wave"
 
 config = CONFIGS[config_name]
 print("[i] Reference image selected:", config["reference"])
@@ -249,7 +251,7 @@ prox_ad = pyopt.ProxAdam(miloss)
 prox_ad.fit(
     x0=miloss.get_np_heightmap().flatten(),
     a=3e-05,
-    stop_crit=pyst.RelError(eps=8.5e-3),
+    stop_crit=pyst.RelError(eps=1.3e-2),
 )
 
 data, history = prox_ad.stats()
@@ -289,6 +291,17 @@ plt.show()
 #################################################################################################
 # SAVING LENS AND IMAGE
 #################################################################################################
+fname = join(output_dir, "final_image_comparison.png")
+fig.savefig(fname, format="png")
+print("[+] Saved final figure to:", fname)
+
+fname = join(output_dir, "final_normals.npy")
+np.save(fname, miloss.get_normals())
+print("[+] Saved final normals to:", fname)
+
+fname = join(output_dir, "final_positions.npy")
+np.save(fname, miloss.get_positions())
+print("[+] Saved final positions to:", fname)
 
 fname = join(output_dir, "heightmap_final.exr")
 mi.util.write_bitmap(fname, miloss.get_mi_heightmap())
@@ -299,7 +312,3 @@ miloss.apply_displacement()
 lens_mesh = [m for m in scene.shapes() if m.id() == "lens"][0]
 lens_mesh.write_ply(fname)
 print("[+] Saved displaced lens to:", fname)
-
-fname = join(output_dir, "final_image_comparison.png")
-fig.savefig(fname, format="png")
-print("[+] Saved final figure to:", fname)
