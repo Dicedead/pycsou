@@ -85,6 +85,12 @@ class MitsubaCausticsOptWrapper(pyca.DiffFunc):
     def get_mi_heightmap(self):
         return self.__params["data"]
 
+    def get_normals(self):
+        return dr.unravel(mi.Vector3f, self.__params_scene["lens.vertex_normals"]).numpy()
+
+    def get_positions(self):
+        return dr.unravel(mi.Vector3f, self.__params_scene["lens.vertex_positions"]).numpy()
+
     def get_curr_image(self):
         return self.__last_image
 
