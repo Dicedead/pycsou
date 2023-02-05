@@ -11,7 +11,8 @@ def normalize(vs):
     return (vs / np.linalg.norm(vs, axis=0)).T
 
 
-def snell_law(incident_ray, normal, n1=1.0003, n2=1.517):
+def snell_law(incident_ray, normal, n1=1.000277, n2=1.5):
+    # refraction indices from Mitsuba test
 
     k = incident_ray  # shorthand
     n = normal  # shorthand
@@ -30,7 +31,7 @@ def snell_law(incident_ray, normal, n1=1.0003, n2=1.517):
 
 def bin_grid(vectors, resolution):
     def get_bin(val, min_val, width):
-        return int(np.clip(np.floor_divide(resolution * (val - min_val), width), 0, resolution - 1))
+        return resolution - 1 - int(np.clip(np.floor_divide(resolution * (val - min_val), width), 0, resolution - 1))
 
     vectors = vectors.T
 
@@ -53,7 +54,7 @@ def bin_grid(vectors, resolution):
 
     for v in vectors:
         x_bin = get_bin(v[0], min_x, bin_width)
-        y_bin = resolution - 1 - get_bin(v[2], min_y, bin_width)
+        y_bin = get_bin(v[2], min_y, bin_width)
         bin_counts[y_bin, x_bin] += 1
 
     return bin_counts
@@ -90,15 +91,26 @@ def test_case_bin_counts():
     print(bin_grid(vectors, 2))
 
 
-if __name__ == "__main__":
-    config = "wave"
+def generic_validation(config, incident_rays, resolution):
+    incident_rays = normalize(incident_rays)
 
     normals = np.load(f"../../mitsuba/caustics/outputs/{config}/final_normals.npy")
     positions = np.load(f"../../mitsuba/caustics/outputs/{config}/final_positions.npy")
 
     normals = normalize(normals)
 
-    incident_ray = np.array([0, 1, 0])
     distance = 7 - positions.T[1]
-    vectors = forward_model(incident_ray, normals, distance, origins=positions)
+    vectors = forward_model(incident_rays, normals, distance, origins=positions, resolution=resolution)
     show_pixels(vectors)
+
+
+def validation_parallel_wave():
+    generic_validation("wave", np.array([0, 1, 0]), 256)
+
+
+def validation_non_parallel_wave(alpha_x=60, alpha_z=-50):
+    generic_validation("wave", np.array([np.sin(np.deg2rad(alpha_x)), 1, np.sin(np.deg2rad(alpha_z))]), 256)
+
+
+if __name__ == "__main__":
+    validation_parallel_wave()
