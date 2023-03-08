@@ -14,6 +14,7 @@ from os.path import join, realpath
 import drjit as dr
 import matplotlib.pyplot as plt
 
+import pycsou.operator as pyop
 import pycsou.opt.solver as pyopt
 import pycsou.opt.stop as pyst
 import pycsou.optics.mitsuba_caustics as pymi
@@ -111,6 +112,7 @@ config_name = "wave"
 config = CONFIGS[config_name]
 print("[i] Reference image selected:", config["reference"])
 
+# noinspection PyTypeChecker
 config.update(
     {
         "render_resolution": (128, 128),
@@ -246,17 +248,21 @@ image_ref = load_ref_image(config, crop_size, output_dir=output_dir)
 
 heightmap_shape = (512, 512, 1)
 miloss = pymi.MitsubaCausticsOptWrapper(scene, image_ref, heightmap_shape, scale_independent_loss)
+lambda_ = 3
+reg = lambda_ * pyop.L2Norm()
 
-prox_ad = pyopt.ProxAdam(miloss)
+prox_ad = pyopt.ProxAdam(miloss, reg)
 prox_ad.fit(
     x0=miloss.get_np_heightmap().flatten(),
     a=3e-05,
-    stop_crit=pyst.RelError(eps=1.3e-2),
+    stop_crit=pyst.MaxIter(120),
 )
 
-data, history = prox_ad.stats()
-plt.semilogy(history["RelError[x]"])
-plt.show()
+# data, history = prox_ad.stats()
+# plt.semilogy(history["RelError[x]"])
+# plt.xlabel('Iterations')
+# plt.ylabel('Rel error')
+# plt.show()
 
 final_heightmap = prox_ad.solution()
 miloss.apply(final_heightmap)
@@ -274,18 +280,17 @@ def show_image(ax, img, title):
     ax.set_title(title)
 
 
-def show_heightmap(fig, ax, values, title):
+def show_heightmap(ax, values, title):
     im = ax.imshow(values.squeeze(), vmax=1e-4)
-    fig.colorbar(im, ax=ax)
     ax.axis("off")
     ax.set_title(title)
 
 
 fig, ax = plt.subplots(1, 3, figsize=(11, 10))
 ax = ax.ravel()
-show_heightmap(fig, ax[2], final_heightmap, "Final heightmap")
-show_image(ax[1], image_ref, "Reference")
-show_image(ax[0], final_image, "Final state")
+show_heightmap(ax[1], final_heightmap, "Final heightmap")
+show_image(ax[0], image_ref, "Reference")
+show_image(ax[2], final_image, "Final state")
 plt.show()
 
 #################################################################################################

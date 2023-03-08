@@ -124,11 +124,11 @@ def generic_validation(config, incident_rays, resolution, postprocess_incident_r
         incident_rays = normalize(incident_rays)
     else:
         incident_rays = postprocess_incident_rays(incident_rays, normals, positions, resolution)
-    finalize_validation(incident_rays, normals, positions, resolution)
+    finalize_validation(incident_rays, normals, positions, resolution, gauss_kernel=False)
 
 
 def validation_horizontal_wave():
-    generic_validation("wave", np.array([0, 1, 0]), 1024)
+    generic_validation("wave", np.array([0, 1, 0]), 512)
 
 
 def validation_non_horizontal_wave(alpha_x=60, alpha_z=-50):
