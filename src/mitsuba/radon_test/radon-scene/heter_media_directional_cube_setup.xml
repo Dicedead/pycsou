@@ -100,30 +100,25 @@
 	<medium type="heterogeneous" id="smoke">
 		<float name="sigma_t" value="0.00001" />
     	<float name="albedo" value="1" />
-        <phase type="isotropic"/>
+		<phase type="hg">
+    		<float name="g" value="0.99"/>
+		</phase>
         <!-- Scale the density values as desired -->
         <float name="scale" value="10"/>
     </medium>
 
 	<shape type="cube" id="ShortBox">
 		<transform name="to_world">
-			<scale x="0.5" y="0.5" z="0.5" />
+			<scale x="0.2" y="0.2" z="0.2" />
 			<translate x="0" y="1" z="0" />
 		</transform>
-		<bsdf type="plastic">
-    		<rgb name="diffuse_reflectance" value="0.1, 0.27, 0.36"/>
-    		<float name="int_ior" value="1.9"/>
-		</bsdf>
+		<ref name="interior" id="smoke"/>
 	</shape>
 
-	<shape type="rectangle" id="Light">
-		<transform name="to_world">
-			<matrix value="0.235 -1.66103e-008 -7.80685e-009 -0.005 -2.05444e-008 3.90343e-009 -0.0893 1.98 2.05444e-008 0.19 8.30516e-009 -0.03 0 0 0 1" />
-		</transform>
-		<ref id="LightBSDF" />
-		<emitter type="area">
-			<rgb name="radiance" value="3,3,3" />
-		</emitter>
-	</shape>
+
+	<emitter type="directional">
+		<vector name="direction" value="0.0 0.0 -1.0"/>
+		<rgb name="irradiance" value="1,1,1" />
+	</emitter>
 
 </scene>

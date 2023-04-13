@@ -1,6 +1,6 @@
 <scene version="3.0.0">
 	<default name="integrator" value="path" />
-	<default name="spp" value="256" />
+	<default name="spp" value="2048" />
 	<default name="resy" value="1024" />
 	<default name="resx" value="1024" />
 	<default name="max_depth" value="65" />
@@ -24,6 +24,7 @@
 		<transform name="to_world">
             <translate x="0" y="1" z="-1"/>
         </transform>
+		<bsdf type="null" id="CameraBSDF" />
 	</shape>
 
 	<bsdf type="null" id="LeftWallBSDF">
@@ -74,12 +75,12 @@
 	</shape>
 
 	<medium type="heterogeneous" id="smoke">
-		<float name="sigma_t" value="0.00001" />
+		<float name="sigma_t" value="0.005" />
     	<float name="albedo" value="1" />
         <!-- Scale the density values as desired -->
-        <float name="scale" value="10"/>
-		<phase type="tabphase">
-			<string name="values" value="0,50,0" />
+        <float name="scale" value="1"/>
+		<phase type="hg">
+    		<float name="g" value="0.99"/>
 		</phase>
     </medium>
 
@@ -91,7 +92,7 @@
 
 	<emitter type="directional">
 		<vector name="direction" value="0.0 0.0 -1.0"/>
-		<rgb name="irradiance" value="10,10,10" />
+		<rgb name="irradiance" value="500,500,500" />
 	</emitter>
 
 </scene>

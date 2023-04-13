@@ -25,13 +25,14 @@
 			<rotate x="1" y="0" z="0" angle="-90"/>
             <translate x="0" y="0" z="0"/>
         </transform>
+		<bsdf type="null" id="CameraBSDF" />
 	</shape>
 
 	<medium type="heterogeneous" id="smoke">
 		<float name="sigma_t" value="0.00001" />
     	<float name="albedo" value="0" />
-		<phase type="rayleigh">
-
+		<phase type="hg">
+    		<float name="g" value="0.99"/>
 		</phase>
         <!-- Scale the density values as desired -->
         <float name="scale" value="10"/>

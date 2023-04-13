@@ -24,6 +24,7 @@
 		<transform name="to_world">
             <translate x="0" y="1" z="-1"/>
         </transform>
+		<bsdf type="null" id="CameraBSDF" />
 	</shape>
 
 	<bsdf type="null" id="LeftWallBSDF">
@@ -78,14 +79,14 @@
     	<float name="albedo" value="1" />
         <!-- Scale the density values as desired -->
         <float name="scale" value="10"/>
-		<phase type="tabphase">
-			<string name="values" value="0,50,0" />
+		<phase type="hg">
+    		<float name="g" value="0.99"/>
 		</phase>
     </medium>
 
 	<shape type="cube" id="ShortBox">
 		<transform name="to_world">
-			<scale x="0.5" y="0.5" z="0.5" />
+			<scale x="0.2" y="0.2" z="0.2" />
 			<translate x="0" y="1" z="0" />
 		</transform>
 		<ref name="interior" id="smoke"/>
@@ -93,7 +94,7 @@
 
 	<emitter type="directional">
 		<vector name="direction" value="0.0 0.0 -1.0"/>
-		<rgb name="irradiance" value="10,10,10" />
+		<rgb name="irradiance" value="10000,10000,10000" />
 	</emitter>
 
 </scene>
