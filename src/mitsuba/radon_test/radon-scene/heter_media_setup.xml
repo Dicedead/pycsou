@@ -97,11 +97,9 @@
         <float name="scale" value="10"/>
     </medium>
 
-	<shape type="cube" id="Sphere">
-		<transform name="to_world">
-			<translate x="0" y="1" z="1" />
-			<scale  x="0.25" y="0.25" z="0.25"/>
-		</transform>
+	<shape type="sphere" id="Sphere">
+		<float name="radius" value="0.33" />
+		<point name="center" value="0 1 0" />
 		<ref name="interior" id="smoke"/>
 	</shape>
 
@@ -115,13 +113,15 @@
             <translate x="0" y="0" z="0"/>
         </transform>
 	</shape>
+
 	<shape type="rectangle" id="Light">
 		<transform name="to_world">
+			<scale x="5" y="5" />
 			<matrix value="0.235 -1.66103e-008 -7.80685e-009 -0.005 -2.05444e-008 3.90343e-009 -0.0893 1.98 2.05444e-008 0.19 8.30516e-009 -0.03 0 0 0 1" />
 		</transform>
 		<ref id="LightBSDF" />
 		<emitter type="area">
-			<rgb name="radiance" value="10,10,10" />
+			<rgb name="radiance" value="1,1,1" />
 		</emitter>
 	</shape>
 </scene>
