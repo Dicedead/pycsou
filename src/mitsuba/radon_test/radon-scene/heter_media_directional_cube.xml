@@ -75,7 +75,7 @@
 	</shape>
 
 	<medium type="heterogeneous" id="smoke">
-		<float name="sigma_t" value="0.00001" />
+		<float name="sigma_t" value="0.001" />
     	<float name="albedo" value="1" />
         <!-- Scale the density values as desired -->
         <float name="scale" value="10"/>

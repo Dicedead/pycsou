@@ -121,7 +121,7 @@
 		</transform>
 		<ref id="LightBSDF" />
 		<emitter type="area">
-			<rgb name="radiance" value="1,1,1" />
+			<rgb name="radiance" value="0.1,0.1,0.1" />
 		</emitter>
 	</shape>
 </scene>

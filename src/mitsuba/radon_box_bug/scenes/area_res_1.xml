@@ -1,0 +1,69 @@
+<scene version="3.0.0">
+	<default name="integrator" value="path" />
+	<default name="spp" value="64" />
+	<default name="resy" value="1024" />
+	<default name="resx" value="1024" />
+	<default name="max_depth" value="65" />
+	<default name="rr_depth" value="1"/>
+	<integrator type="$integrator">
+		<integer name="max_depth" value="$max_depth" />
+		<integer name="rr_depth" value="$rr_depth"/>
+	</integrator>
+
+	<bsdf type="twosided" id="FloorBSDF">
+		<bsdf type="diffuse">
+			<rgb name="reflectance" value="0,0,0" />
+		</bsdf>
+	</bsdf>
+	<bsdf type="twosided" id="CeilingBSDF">
+		<bsdf type="diffuse">
+			<rgb name="reflectance" value="0,0,0" />
+		</bsdf>
+	</bsdf>
+
+	<shape type="rectangle" id="Floor">
+		<transform name="to_world">
+			<matrix value="-4.37114e-008 1 4.37114e-008 0 0 -8.74228e-008 2 0 1 4.37114e-008 1.91069e-015 0 0 0 0 1" />
+		</transform>
+		<ref id="FloorBSDF" />
+
+        <sensor type="irradiancemeter">
+		<sampler type="independent">
+		    	<integer name="sample_count" value="$spp" />
+		    </sampler>
+		    <film type="hdrfilm">
+			    <integer name="width" value="$resx" />
+			    <integer name="height" value="$resy" />
+			    <string name="file_format" value="openexr" />
+			    <string name="pixel_format" value="rgb" />
+			    <rfilter type="box" />
+		    </film>
+	    </sensor>
+
+	</shape>
+
+	<medium type="homogeneous" id="smoke">
+		<float name="sigma_t" value="100000" />
+    	<float name="albedo" value="0.5" />
+		<phase type="hg">
+    		<float name="g" value="0.5"/>
+		</phase>
+        <float name="scale" value="1"/>
+    </medium>
+
+	<shape type="sphere" id="Sphere">
+		<float name="radius" value="0.33" />
+		<point name="center" value="0 1 0" />
+		<ref name="interior" id="smoke"/>
+	</shape>
+
+	<shape type="rectangle" id="Light">
+		<transform name="to_world">
+			<matrix value="-1 7.64274e-015 -1.74846e-007 0 8.74228e-008 8.74228e-008 -2 2 0 -1 -4.37114e-008 0 0 0 0 1" />
+		</transform>
+		<ref id="CeilingBSDF" />
+		<emitter type="area">
+			<rgb name="radiance" value="0.1,0.1,0.1" />
+		</emitter>
+	</shape>
+</scene>

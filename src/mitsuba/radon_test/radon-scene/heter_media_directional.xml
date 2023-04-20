@@ -3,7 +3,7 @@
 	<default name="spp" value="2048" />
 	<default name="resy" value="1024" />
 	<default name="resx" value="1024" />
-	<default name="max_depth" value="65" />
+	<default name="max_depth" value="2" />
 	<integrator type="$integrator">
 		<integer name="max_depth" value="$max_depth" />
 	</integrator>
@@ -75,7 +75,7 @@
 	</shape>
 
 	<medium type="heterogeneous" id="smoke">
-		<float name="sigma_t" value="0.005" />
+		<float name="sigma_t" value="0" />
     	<float name="albedo" value="1" />
         <!-- Scale the density values as desired -->
         <float name="scale" value="1"/>
@@ -92,7 +92,7 @@
 
 	<emitter type="directional">
 		<vector name="direction" value="0.0 0.0 -1.0"/>
-		<rgb name="irradiance" value="500,500,500" />
+		<rgb name="irradiance" value="5000,5000,5000" />
 	</emitter>
 
 </scene>
