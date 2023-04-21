@@ -4,12 +4,9 @@
 	<default name="resy" value="1024" />
 	<default name="resx" value="1024" />
 	<default name="max_depth" value="65" />
-	<default name="rr_depth" value="1"/>
 	<integrator type="$integrator">
 		<integer name="max_depth" value="$max_depth" />
-		<integer name="rr_depth" value="$rr_depth"/>
 	</integrator>
-
 	<sensor type="perspective">
 		<float name="fov" value="19.5" />
 		<transform name="to_world">
@@ -27,26 +24,7 @@
 		</film>
 	</sensor>
 
-
-	<bsdf type="twosided" id="FloorBSDF">
-		<bsdf type="diffuse">
-			<rgb name="reflectance" value="0.5,0.5,0.5" />
-		</bsdf>
-	</bsdf>
-	<bsdf type="twosided" id="CeilingBSDF">
-		<bsdf type="diffuse">
-			<rgb name="reflectance" value="0.5,0.5,0.5" />
-		</bsdf>
-	</bsdf>
-
-	<shape type="rectangle" id="Floor">
-		<transform name="to_world">
-			<matrix value="-4.37114e-008 1 4.37114e-008 0 0 -8.74228e-008 2 0 1 4.37114e-008 1.91069e-015 0 0 0 0 1" />
-		</transform>
-		<ref id="FloorBSDF" />
-	</shape>
-
-	<medium type="homogeneous" id="smoke">
+    <medium type="homogeneous" id="smoke">
 		<float name="sigma_t" value="0" />
     	<float name="albedo" value="1" />
 		<phase type="hg">
@@ -61,13 +39,32 @@
 		<ref name="interior" id="smoke"/>
 	</shape>
 
-	<shape type="rectangle" id="Light">
+
+	<shape type="rectangle" id="Floor">
 		<transform name="to_world">
-			<matrix value="-1 7.64274e-015 -1.74846e-007 0 8.74228e-008 8.74228e-008 -2 2 0 -1 -4.37114e-008 0 0 0 0 1" />
+			<rotate x="1" y="0" z="0" angle="90" />
 		</transform>
-		<ref id="CeilingBSDF" />
-		<emitter type="directionalarea">
-			<rgb name="radiance" value="15,15,15" />
-		</emitter>
+		<bsdf type="twosided" id="FloorBSDF">
+			<bsdf type="diffuse">
+				<rgb name="reflectance" value="0.5,0.5,0.5" />
+			</bsdf>
+		</bsdf>
 	</shape>
+
+
+	<shape type="rectangle" id="Ceiling">
+		<transform name="to_world">
+			<translate x="0" y="0" z="2" />
+			<rotate x="1" y="0" z="0" angle="-90" />
+		</transform>
+		<emitter type="directionalarea">
+			<rgb name="radiance" value="15, 15, 15" />
+		</emitter>
+		<bsdf type="twosided" id="LightBSDF">
+			<bsdf type="diffuse">
+				<rgb name="reflectance" value="0.5,0.5,0.5" />
+			</bsdf>
+		</bsdf>
+	</shape>
+
 </scene>
