@@ -1,0 +1,49 @@
+<scene version="3.0.0">
+	<default name="integrator" value="ptracer" />
+	<default name="spp" value="64" />
+	<default name="resy" value="1024" />
+	<default name="resx" value="1024" />
+	<default name="max_depth" value="65" />
+	<integrator type="$integrator">
+		<integer name="max_depth" value="$max_depth" />
+	</integrator>
+
+	<shape type="sphere" id="Floor">
+		<bsdf type="twosided" id="FloorBSDF">
+			<bsdf type="diffuse">
+				<rgb name="reflectance" value="0.5,0.5,0.5" />
+			</bsdf>
+		</bsdf>
+        <sensor type="irradiancemeter">
+		    <sampler type="independent">
+		    	<integer name="sample_count" value="$spp" />
+		    </sampler>
+		    <film type="hdrfilm">
+			    <integer name="width" value="$resx" />
+			    <integer name="height" value="$resy" />
+			    <string name="file_format" value="openexr" />
+			    <string name="pixel_format" value="rgb" />
+			    <rfilter type="gaussian">
+    <float name="stddev" value="0.00025"/>
+</rfilter>
+
+		    </film>
+	    </sensor>
+	</shape>
+
+
+	<shape type="sphere" id="Ceiling">
+		<transform name="to_world">
+			<translate x="0" y="0" z="2" />
+		</transform>
+		<emitter type="area">
+			<rgb name="radiance" value="1000, 1000, 1000" />
+		</emitter>
+		<bsdf type="twosided" id="LightBSDF">
+			<bsdf type="diffuse">
+				<rgb name="reflectance" value="0.5,0.5,0.5" />
+			</bsdf>
+		</bsdf>
+	</shape>
+
+</scene>

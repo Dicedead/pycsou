@@ -1,0 +1,67 @@
+<scene version="3.0.0">
+	<default name="integrator" value="ptracer" />
+	<default name="spp" value="64" />
+	<default name="resy" value="1024" />
+	<default name="resx" value="1024" />
+	<default name="max_depth" value="65" />
+	<integrator type="$integrator">
+		<integer name="max_depth" value="$max_depth" />
+	</integrator>
+
+    <medium type="homogeneous" id="smoke">
+		<float name="sigma_t" value="10" />
+    	<float name="albedo" value="0.5" />
+		<phase type="hg">
+    		<float name="g" value="0.5"/>
+		</phase>
+        <float name="scale" value="1"/>
+    </medium>
+
+	<shape type="sphere" id="Sphere">
+		<float name="radius" value="0.33" />
+		<point name="center" value="0 1 0" />
+		<ref name="interior" id="smoke"/>
+	</shape>
+
+
+    <shape type="rectangle" id="Floor">
+		<transform name="to_world">
+			<rotate x="1" y="0" z="0" angle="90" />
+		</transform>
+		<bsdf type="twosided" id="FloorBSDF">
+			<bsdf type="diffuse">
+				<rgb name="reflectance" value="0.5,0.5,0.5" />
+			</bsdf>
+		</bsdf>
+        <sensor type="irradiancemeter">
+		<sampler type="independent">
+		    	<integer name="sample_count" value="$spp" />
+		    </sampler>
+		    <film type="hdrfilm">
+			    <integer name="width" value="$resx" />
+			    <integer name="height" value="$resy" />
+			    <string name="file_format" value="openexr" />
+			    <string name="pixel_format" value="rgb" />
+			    <rfilter type="box" />
+		    </film>
+	    </sensor>
+
+	</shape>
+
+
+	<shape type="rectangle" id="Ceiling">
+		<transform name="to_world">
+			<translate x="0" y="0" z="2" />
+			<rotate x="1" y="0" z="0" angle="-90" />
+		</transform>
+		<emitter type="directionalarea">
+			<rgb name="radiance" value="150000, 150000, 150000" />
+		</emitter>
+		<bsdf type="twosided" id="LightBSDF">
+			<bsdf type="diffuse">
+				<rgb name="reflectance" value="0.5,0.5,0.5" />
+			</bsdf>
+		</bsdf>
+	</shape>
+
+</scene>
