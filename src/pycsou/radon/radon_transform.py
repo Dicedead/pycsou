@@ -6,20 +6,12 @@ import pycsou.util.ptype as pyct
 from pycsou.util import view_as_complex, view_as_real
 
 
-class FiniteSupport:
-    def supportF(self, **kwargs) -> pyct.NDArray:
+class FiniteSupportPulse:
+    def supportF(self, **kwargs) -> pyct.Real:
         return NotImplementedError
 
-    def support(self, **kwargs) -> pyct.NDArray:
+    def support(self, **kwargs) -> pyct.Real:
         return NotImplementedError
-
-    def supportF_size(self, **kwargs) -> pyct.Real:
-        tmp = self.supportF(**kwargs)
-        return abs(max(tmp) - min(tmp))
-
-    def support_size(self, **kwargs) -> pyct.Real:
-        tmp = self.support(**kwargs)
-        return abs(max(tmp) - min(tmp))
 
     def apply(self, arr: pyct.NDArray) -> pyct.NDArray:
         return NotImplementedError
@@ -36,12 +28,12 @@ class RadonTransform:
 
     def __init__(
         self,
-        psi: FiniteSupport,
+        psi: FiniteSupportPulse,
         shifts: pyct.NDArray,
         n: pyct.NDArray,
         t: pyct.NDArray,
         lattice_shifts=False,
-        lattice_t=False,
+        eps=5e-3,
         **kwargs
     ):
         """
@@ -53,6 +45,7 @@ class RadonTransform:
         n: (Nn, 2) array
         t: (Nt, ) array
         lattice_shifts: bool indicating whether shifts lie on a lattice
+        eps: Real: requested relative accuracy, must be non-negative
         """
         assert lattice_shifts or shifts.shape[1] == n.shape[1] == 2
 
@@ -62,27 +55,44 @@ class RadonTransform:
         self._n = n
         self._t = t
         self._lattice_shifts = lattice_shifts
-        self._lattice_t = lattice_t
+        self._eps = eps
 
         xp = pycu.get_array_module(self._n)
         extreme_shift = xp.max(xp.abs(shifts))
 
-        if "force_support" not in kwargs:
-            freq_support = self._psi.supportF_size(**kwargs)
-            self._time_support = self._psi.support_size(**kwargs) + extreme_shift
-        else:
-            self._time_support, freq_support = kwargs["force_support"]
-
+        freq_support = self._psi.supportF(**kwargs)
+        self._time_support = self._psi.support(**kwargs) + extreme_shift
         self._time_bandwidth_product = np.ceil(self._time_support * freq_support / 2.0)
-        self._freqs = xp.arange(-self._time_bandwidth_product, self._time_bandwidth_product + 1).reshape(-1, 1)
 
-    def apply(self, alpha: pyct.NDArray, eps=0) -> pyct.NDArray:
+        self._freqs = xp.arange(-self._time_bandwidth_product, self._time_bandwidth_product + 1)
+        self._freqs = self._freqs.reshape(-1, 1) / self._time_support
+
+        scaled_n = xp.kron(self._freqs, self._n)
+        if self._lattice_shifts:
+            self._first_nufft = pyop.nufft.NUFFT.type2(
+                2 * np.pi * scaled_n, self._shifts, isign=-1, real=True, eps=self._eps
+            )
+        else:
+            self._first_nufft = pyop.nufft.NUFFT.type3(
+                2 * np.pi * self._shifts, scaled_n, isign=-1, real=True, eps=self._eps
+            )
+
+        self._psi_applyF = self._psi.applyF(arr=scaled_n)
+
+        self._second_nufft = pyop.NUFFT.type2(
+            (2 * np.pi / self._time_support) * self._t,
+            N=2 * self._time_bandwidth_product + 1,
+            isign=1,
+            real=False,
+            eps=eps,
+        )
+
+    def apply(self, alpha: pyct.NDArray) -> pyct.NDArray:
         """
 
         Parameters
         ----------
         alpha: (..., M)
-        eps: Real: requested relative accuracy, must be non-negative
 
         Returns
         -------
@@ -91,38 +101,21 @@ class RadonTransform:
         """
         assert alpha.shape[-1] == self._dim
 
-        arg = self.applyF(alpha, self._freqs / self._time_support, eps=eps) / self._time_support
+        arg = self.applyF(alpha) / self._time_support
         arg = view_as_real(np.ascontiguousarray(arg))
+        return view_as_complex(self._second_nufft.apply(arg)).real
 
-        return view_as_complex(
-            pyop.NUFFT.type2(
-                (2 * np.pi / self._time_support) * self._t,
-                N=2 * self._time_bandwidth_product + 1,
-                isign=1,
-                real=False,
-                eps=eps,
-            ).apply(arg)
-        ).real
-
-    def applyF(self, alpha: pyct.NDArray, freqs: pyct.NDArray, eps=0) -> pyct.NDArray:
+    def applyF(self, alpha: pyct.NDArray) -> pyct.NDArray:
         """
 
         Parameters
         ----------
         alpha: (..., M)
-        freqs: (..., 1)
-        eps: Real: requested relative accuracy, must be non-negative
 
         Returns
         -------
         Evaluating the Fourier Transform of the Radon Transform with linear combination weights alpha along n at
-        frequency vectors freqs
+        regularly spaced frequency vectors
 
         """
-        xp = pycu.get_array_module(self._n)
-        scaled_n = xp.kron(freqs, self._n)
-        if self._lattice_shifts:
-            shifted_sum = pyop.nufft.NUFFT.type2(2 * np.pi * scaled_n, self._shifts, isign=-1, real=True, eps=eps)
-        else:
-            shifted_sum = pyop.nufft.NUFFT.type3(2 * np.pi * self._shifts, scaled_n, isign=-1, real=True, eps=eps)
-        return (self._psi.applyF(arr=scaled_n) * view_as_complex(shifted_sum(alpha))).reshape(freqs.shape[0], -1).T
+        return (self._psi_applyF * view_as_complex(self._first_nufft(alpha))).reshape(self._freqs.shape[0], -1).T
