@@ -87,6 +87,8 @@ class RadonTransform:
             eps=eps,
         )
 
+        # TODO precompute adjoint stuff
+
     def apply(self, alpha: pyct.NDArray) -> pyct.NDArray:
         """
 
@@ -119,3 +121,6 @@ class RadonTransform:
 
         """
         return (self._psi_applyF * view_as_complex(self._first_nufft(alpha))).reshape(self._freqs.shape[0], -1).T
+
+    def adjoint(self, alpha: pyct.NDArray) -> pyct.NDArray:
+        pass
