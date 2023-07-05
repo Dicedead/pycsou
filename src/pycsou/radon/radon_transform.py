@@ -1,9 +1,10 @@
 import numpy as np
+import pyffs
 
 import pycsou.operator.linop as pyop
 import pycsou.util.array_module as pycu
 import pycsou.util.ptype as pyct
-from pycsou.util import view_as_complex, view_as_real
+from pycsou.util import view_as_complex
 
 
 class FiniteSupportPulse:
@@ -79,14 +80,6 @@ class RadonTransform:
 
         self._psi_applyF = self._psi.applyF(arr=scaled_n)
 
-        self._second_nufft = pyop.NUFFT.type2(
-            (2 * np.pi / self._time_support) * self._t,
-            N=2 * self._time_bandwidth_product + 1,
-            isign=1,
-            real=False,
-            eps=eps,
-        )
-
         # TODO precompute adjoint stuff
 
     def apply(self, alpha: pyct.NDArray) -> pyct.NDArray:
@@ -104,8 +97,7 @@ class RadonTransform:
         assert alpha.shape[-1] == self._dim
 
         arg = self.applyF(alpha) / self._time_support
-        arg = view_as_real(np.ascontiguousarray(arg))
-        return view_as_complex(self._second_nufft.apply(arg)).real
+        return pyffs.fs_interp(arg, self._time_support, self._t[0], self._t[-1], len(self._t)).real
 
     def applyF(self, alpha: pyct.NDArray) -> pyct.NDArray:
         """
