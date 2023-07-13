@@ -6,7 +6,7 @@ import pycsou.operator.linop as pyop
 import pycsou.util.array_module as pycu
 import pycsou.util.ptype as pyct
 from pycsou.radon.finsupportfunc import FinSupFunc
-from pycsou.util import view_as_complex
+from pycsou.util import view_as_complex, view_as_real
 
 
 class RadonOp(pyca.LinOp):
@@ -19,14 +19,19 @@ class RadonOp(pyca.LinOp):
         self._t = t
         self._eps = eps
 
+        if self._t["num"] < 2:
+            msg = " ".join(["Need to sample the Radon transform at 2 offsets `t` at least."])
+            raise ValueError(msg)
+
         xp = pycu.get_array_module(self._n)
-        self._n = xp.array(list(zip([xp.cos(n), xp.sin(n)])))
         self._n_num = len(n)
+        self._n = xp.array(list(zip([xp.cos(n), xp.sin(n)])))
+        self._n = self._n.T.reshape(self._n_num, 2)
         self._output_dim = self._n_num * self._t["num"]
 
         freq_support = self._psi.supportF(**kwargs)
         self._time_support = self._psi.support(**kwargs) + extreme_shift
-        self._time_bandwidth_product = np.ceil(self._time_support * freq_support / 2.0)
+        self._time_bandwidth_product = int(np.ceil(self._time_support * freq_support / 2.0))
 
         self._freqs = xp.arange(-self._time_bandwidth_product, self._time_bandwidth_product + 1)
         self._freqs = self._freqs.reshape(-1, 1) / self._time_support
@@ -35,12 +40,12 @@ class RadonOp(pyca.LinOp):
 
         self._psi_applyF = self._psi.applyF(arr=self._scaled_n)
 
-        adj_a_bar = np.exp(1j * 2.0 * np.pi * self._t["start"] / self._time_support)
+        self._adj_a_bar = np.exp(1j * 2.0 * np.pi * self._t["start"] / self._time_support)
         self._adj_w_bar = np.exp(1j * 2.0 * np.pi * (self._t["start"] - self._t["stop"]) / (self._t["num"] - 1))
-        self._adj_a_vect = adj_a_bar ** xp.arange(-self._time_bandwidth_product, self._time_bandwidth_product + 1)
+        self._adj_a_vect = self._adj_a_bar ** (-1 * xp.arange(0, 2 * self._time_bandwidth_product + 1))
         self._adj_w_vect = (self._adj_w_bar ** (-self._time_bandwidth_product)) ** xp.arange(0, self._t["num"])
 
-        self._apply_nufft = None
+        self._nufft = None
         self._adjoint_nufft = None
 
     def apply(self, alpha: pyct.NDArray) -> pyct.NDArray:
@@ -59,7 +64,8 @@ class RadonOp(pyca.LinOp):
         assert alpha.shape[-1] == self._dim
         arg = self.applyF(alpha) / self._time_support
         ret = pyffs.fs_interp(arg, self._time_support, self._t["start"], self._t["stop"], self._t["num"]).real
-        return ret.reshape(-1, self._output_dim)
+        ret = ret.reshape(-1, self._output_dim)
+        return ret.squeeze()
 
     def adjoint(self, arr: pyct.NDArray) -> pyct.NDArray:
         """
@@ -73,11 +79,18 @@ class RadonOp(pyca.LinOp):
         Compute the adjoint of the Radon Transform at n, t, returns a vector of shape (..., Q)
 
         """
+        # Note: cannot use pyffs.fs_interp directly because Nt is not necessarily odd
+
         assert arr.shape[-1] == self._output_dim
-        arr = arr.reshape(-1, self._n_num, self._t)
+        arr = arr.reshape(-1, self._n_num, self._t["num"])
         arg = pyffs.czt(self._adj_w_vect * arr, A=1, W=self._adj_w_bar, M=2 * self._time_bandwidth_product + 1, axis=-1)
         arg = self._adj_a_vect * arg
-        return self._adjoint_nufft(arg)
+        arg = view_as_real(arg)
+        ret = (self._adj_a_bar**self._time_bandwidth_product) * self._nufft.adjoint(arg)
+        ret = view_as_complex(ret).squeeze().real
+        if not ret.shape:
+            return np.array([ret])
+        return ret
 
     def applyF(self, alpha: pyct.NDArray) -> pyct.NDArray:
         """
@@ -92,7 +105,7 @@ class RadonOp(pyca.LinOp):
         regularly spaced frequency vectors
 
         """
-        return (self._psi_applyF * view_as_complex(self._apply_nufft(alpha))).reshape(self._freqs.shape[0], -1).T
+        return (self._psi_applyF * view_as_complex(self._nufft(alpha))).reshape(self._freqs.shape[0], -1).T
 
     @staticmethod
     def uniform(delta: dict, psi: FinSupFunc, n: dict, t: dict, eps=5e-3, **kwargs):
@@ -135,7 +148,7 @@ class RadonOp(pyca.LinOp):
             psi,
             xp.linspace(**n),
             t,
-            xp.max(np.array([[delta["start"][i], delta["stop"][i]] for i in [0, 1]]).flatten()),
+            xp.max(np.array([[abs(delta["start"][i]), abs(delta["stop"][i])] for i in [0, 1]]).flatten()),
             eps,
             **kwargs
         )
@@ -187,11 +200,11 @@ class _UniformRadonOp(RadonOp):
         **kwargs
     ):
         super().__init__(shape, delta, psi, n, t, extreme_shift, eps, **kwargs)
-        self._apply_nufft = pyop.nufft.NUFFT.type2(
+        self._nufft = pyop.nufft.NUFFT.type2(
             2 * np.pi * self._scaled_n, self._delta, isign=-1, real=True, eps=self._eps
         )
         self._adjoint_nufft = pyop.nufft.NUFFT.type1(
-            2 * np.pi * self._scaled_n, self._delta, isign=1, real=True, eps=self._eps
+            2 * np.pi * self._scaled_n, self._delta, isign=1, real=False, eps=self._eps
         )
 
 
@@ -208,9 +221,9 @@ class _NonUniformRadonOp(RadonOp):
         **kwargs
     ):
         super().__init__(shape, delta, psi, n, t, extreme_shift, eps, **kwargs)
-        self._apply_nufft = pyop.nufft.NUFFT.type3(
+        self._nufft = pyop.nufft.NUFFT.type3(
             2 * np.pi * self._delta, self._scaled_n, isign=-1, real=True, eps=self._eps
         )
         self._adjoint_nufft = pyop.nufft.NUFFT.type3(
-            self._scaled_n, 2 * np.pi * self._delta, isign=1, real=True, eps=self._eps
+            self._scaled_n, 2 * np.pi * self._delta, isign=1, real=False, eps=self._eps
         )
