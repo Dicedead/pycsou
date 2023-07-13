@@ -40,10 +40,11 @@ class RadonOp(pyca.LinOp):
 
         self._psi_applyF = self._psi.applyF(arr=self._scaled_n)
 
-        self._adj_a_bar = np.exp(1j * 2.0 * np.pi * self._t["start"] / self._time_support)
-        self._adj_w_bar = np.exp(1j * 2.0 * np.pi * (self._t["start"] - self._t["stop"]) / (self._t["num"] - 1))
-        self._adj_a_vect = self._adj_a_bar ** (-1 * xp.arange(0, 2 * self._time_bandwidth_product + 1))
+        self._adj_a_bar = xp.exp(1j * 2.0 * np.pi * self._t["start"] / self._time_support)
+        self._adj_w_bar = xp.exp(1j * 2.0 * np.pi * (self._t["start"] - self._t["stop"]) / (self._t["num"] - 1))
+        self._adj_a_vect = self._adj_a_bar ** (-xp.arange(0, 2 * self._time_bandwidth_product + 1))
         self._adj_w_vect = (self._adj_w_bar ** (-self._time_bandwidth_product)) ** xp.arange(0, self._t["num"])
+        self._adj_psi_applyF = xp.conj(self._psi_applyF).reshape(self._freqs.shape[0], -1).T * self._adj_a_vect
 
         self._nufft = None
         self._adjoint_nufft = None
@@ -83,11 +84,14 @@ class RadonOp(pyca.LinOp):
 
         assert arr.shape[-1] == self._output_dim
         arr = arr.reshape(-1, self._n_num, self._t["num"])
-        arg = pyffs.czt(self._adj_w_vect * arr, A=1, W=self._adj_w_bar, M=2 * self._time_bandwidth_product + 1, axis=-1)
-        arg = self._adj_a_vect * arg
+        arr = self._adj_w_vect * arr
+        arg = pyffs.czt(arr, A=1, W=self._adj_w_bar, M=2 * self._time_bandwidth_product + 1, axis=-1)
+        arg = self._adj_psi_applyF * arg
         arg = view_as_real(arg)
-        ret = (self._adj_a_bar**self._time_bandwidth_product) * self._nufft.adjoint(arg)
-        ret = view_as_complex(ret).squeeze().real
+        ret = self._nufft.adjoint(arg.flatten())
+        ret = (self._adj_a_bar**self._time_bandwidth_product) * ret
+        ret = view_as_complex(ret)
+        ret = ret.squeeze().real
         if not ret.shape:
             return np.array([ret])
         return ret

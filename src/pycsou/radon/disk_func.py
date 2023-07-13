@@ -20,8 +20,13 @@ class Disk(FinSupFunc):
 
     def applyF(self, arr: pyct.NDArray) -> pyct.NDArray:
         xp = pycu.get_array_module(arr)
-        rho = xp.linalg.norm(arr)
-        return (self._radius / rho) * scipy.special.j1(self._radius * 2 * np.pi * rho)
+        rho = xp.linalg.norm(arr, axis=-1)
+        ret = (np.pi * (self._radius**2)) * np.ones(*arr.shape[:-1] if len(arr.shape) > 1 else 1)
+        if not ret.shape:
+            ret = xp.array([ret])
+        tmp = rho[rho > 0]
+        ret[rho > 0] = (self._radius / tmp) * scipy.special.j1(self._radius * 2 * np.pi * tmp)
+        return ret
 
     def supportF(self, **kwargs) -> pyct.Real:
         if "support_disk_f" in kwargs:
