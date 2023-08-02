@@ -29,7 +29,7 @@ def benchmark(delta, psi, n, t, eps, alphas, n_runs, t_runs, title_prefix, **kwa
     n_runstart, n_runend, n_step = n_runs["start"], n_runs["stop"], n_runs["step"]
     t_runstart, t_runend, t_step = t_runs["start"], t_runs["stop"], t_runs["step"]
 
-    n_timesteps = np.zeros(n_runend - n_runstart)
+    n_timesteps = np.zeros(int((n_runend - n_runstart) / n_step))
     k = 0
     for run in tqdm.trange(n_runstart, n_runend, n_step):
         if uniform_bool:
@@ -41,7 +41,7 @@ def benchmark(delta, psi, n, t, eps, alphas, n_runs, t_runs, title_prefix, **kwa
         time_run(radon_op, alphas, n_timesteps, k)
         k += 1
 
-    t_timesteps = np.zeros(t_runend - t_runstart)
+    t_timesteps = np.zeros(int((t_runend - t_runstart) / t_step))
     k = 0
     for run in tqdm.trange(t_runstart, t_runend, t_step):
         ts = {"start": t["start"], "stop": t["stop"], "num": run}
@@ -67,19 +67,19 @@ sparse_deltas_x = 0.3 * np.array([1, 0.5, -0.5])
 sparse_deltas_y = 0.3 * np.array([0, 0.25, -0.5])
 sparse_deltas = np.array(list(zip(sparse_deltas_x, sparse_deltas_y)))
 
-grid_deltas = {"start": [-64, -64], "stop": [64, 64], "num": [2048, 2048]}
+grid_deltas = {"start": [-1024, -1024], "stop": [1024, 1024], "num": [2048, 2048]}
 
 sparse_n = np.linspace(start=0, stop=2 * np.pi, num=20)
 
 grid_n = {"start": 0, "stop": 2 * np.pi, "num": 2000}
 
-n_run = {"start": 2000, "stop": 2001, "step": 1}
+n_run = {"start": 1500, "stop": 2500, "step": 20}
 
-t = {"start": -1, "stop": 1, "num": 2000}
+t = {"start": -1024, "stop": 1024, "num": 2000}
 
-t_run = {"start": 2000, "stop": 2001, "step": 1}
+t_run = {"start": 1500, "stop": 2500, "step": 20}
 
-gridded_alphas = np.ones(np.prod(grid_deltas["num"]))
+gridded_alphas = np.random.randn(np.prod(grid_deltas["num"]))
 sparse_alphas = np.ones(len(sparse_deltas))
 
 if __name__ == "__main__":
@@ -112,5 +112,5 @@ if __name__ == "__main__":
         print(f"\nGaussian uniform, eps={eps}")
         benchmark(grid_deltas, gaussian, grid_n, t, eps, gridded_alphas, n_run, t_run, f"gaussian_eps={eps}")
 
-        print(f"\nGaussian non uniform, eps={eps}")
-        benchmark(sparse_deltas, gaussian, sparse_n, t, eps, sparse_alphas, n_run, t_run, f"gaussian_eps={eps}")
+        # print(f"\nGaussian non uniform, eps={eps}")
+        # benchmark(sparse_deltas, gaussian, sparse_n, t, eps, sparse_alphas, n_run, t_run, f"gaussian_eps={eps}")

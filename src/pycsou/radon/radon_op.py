@@ -38,16 +38,18 @@ class RadonOp(pyca.LinOp):
 
         self._scaled_n = xp.kron(self._freqs, self._n)
 
-        self._psi_applyF = self._psi.applyF(arr=self._scaled_n)
+        self._psi_applyF = self._psi.applyF(arr=self._scaled_n) / self._time_support
 
         self._adj_a = xp.exp(-1j * 2.0 * np.pi * self._t["start"] / self._time_support)
-        self._adj_w = xp.exp(1j * 2.0 * np.pi * (self._t["stop"] - self._t["start"]) / (self._t["num"] - 1))
-        self._adj_a_vect = self._adj_a ** (-xp.arange(0, 2 * self._time_bandwidth_product + 1))
+        self._adj_w = xp.exp(
+            1j * 2.0 * np.pi * (self._t["stop"] - self._t["start"]) / ((self._t["num"] - 1) * self._time_support)
+        )
+        self._adj_a_vect = self._adj_a ** (-xp.arange(-self._time_bandwidth_product, self._time_bandwidth_product + 1))
         self._adj_w_vect = (self._adj_w ** (-self._time_bandwidth_product)) ** xp.arange(0, self._t["num"])
-        self._adj_psi_applyF = xp.conj(self._psi_applyF).reshape(self._freqs.shape[0], -1).T * self._adj_a_vect
+        self._adj_psi_applyF = self._psi_applyF.reshape(self._freqs.shape[0], -1).T * self._adj_a_vect
 
         self._nufft = None
-        self._adjoint_nufft = None
+        self._adj_nufft = None
 
     def apply(self, alpha: pyct.NDArray) -> pyct.NDArray:
         """
@@ -63,7 +65,8 @@ class RadonOp(pyca.LinOp):
 
         """
         assert alpha.shape[-1] == self._dim
-        arg = self.applyF(alpha) / self._time_support
+        arg = self.applyF(alpha)
+
         ret = pyffs.fs_interp(arg, self._time_support, self._t["start"], self._t["stop"], self._t["num"]).real
         ret = ret.reshape(-1, self._output_dim)
         return ret.squeeze()
@@ -85,15 +88,18 @@ class RadonOp(pyca.LinOp):
         assert arr.shape[-1] == self._output_dim
         arr = arr.reshape(-1, self._n_num, self._t["num"])
         arr = self._adj_w_vect * arr
-        arg = pyffs.czt(arr, A=1, W=self._adj_w, M=2 * self._time_bandwidth_product + 1, axis=-1)
+        arg = pyffs.czt(arr, A=1.0, W=self._adj_w, M=2 * self._time_bandwidth_product + 1, axis=-1)
         arg = self._adj_psi_applyF * arg
         arg = view_as_real(arg)
-        ret = self._adjoint_nufft(arg.flatten())
-        ret = (self._adj_a**self._time_bandwidth_product) * view_as_complex(ret)
-        ret = ret.squeeze().real
+        ret = self._nufft.adjoint(arg.flatten())
+
+        ret = ret.squeeze()
         if not ret.shape:
             return np.array([ret])
         return ret
+
+    def lipschitz(self, **kwargs) -> pyct.Real:
+        return self._nufft.lipschitz(**kwargs) * np.max(np.abs(self._freqs)) * (2 * self._time_bandwidth_product + 1)
 
     def applyF(self, alpha: pyct.NDArray) -> pyct.NDArray:
         """
@@ -206,9 +212,6 @@ class _UniformRadonOp(RadonOp):
         self._nufft = pyop.nufft.NUFFT.type2(
             2 * np.pi * self._scaled_n, self._delta, isign=-1, real=True, eps=self._eps
         )
-        self._adjoint_nufft = pyop.nufft.NUFFT.type1(
-            2 * np.pi * self._scaled_n, self._delta, isign=-1, real=False, eps=self._eps
-        )
 
 
 class _NonUniformRadonOp(RadonOp):
@@ -226,7 +229,4 @@ class _NonUniformRadonOp(RadonOp):
         super().__init__(shape, delta, psi, n, t, extreme_shift, eps, **kwargs)
         self._nufft = pyop.nufft.NUFFT.type3(
             2 * np.pi * self._delta, self._scaled_n, isign=-1, real=True, eps=self._eps
-        )
-        self._adjoint_nufft = pyop.nufft.NUFFT.type3(
-            self._scaled_n, 2 * np.pi * self._delta, isign=-1, real=False, eps=self._eps
         )

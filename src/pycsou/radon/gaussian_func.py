@@ -26,9 +26,9 @@ class TruncatedGaussian(FinSupFunc):
 
     def apply(self, arr: pyct.NDArray) -> pyct.NDArray:
         xp = pycu.get_array_module(arr)
-        w = arr / (np.sqrt(2) * self._sigma)
-        out = xp.exp(-np.sum(w**2, axis=-1))
-        out[xp.linalg.norm(arr) > 1] = 0
+        w = arr / (xp.sqrt(2) * self._sigma)
+        out = xp.exp(-xp.sum(w**2, axis=-1))
+        out[xp.linalg.norm(arr, axis=-1) > 1] = 0
         return out
 
     def support(self, **kwargs) -> pyct.Real:
