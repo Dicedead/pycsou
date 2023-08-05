@@ -34,9 +34,9 @@ class RadonOp(pyca.LinOp):
         self._time_bandwidth_product = int(np.ceil(self._time_support * freq_support / 2.0))
 
         self._freqs = xp.arange(-self._time_bandwidth_product, self._time_bandwidth_product + 1)
-        self._freqs = self._freqs.reshape(-1, 1) / self._time_support
+        self._freqs = self._freqs / self._time_support
 
-        self._scaled_n = xp.kron(self._freqs, self._n)
+        self._scaled_n = xp.kron(self._n.T, self._freqs).T
 
         self._psi_applyF = self._psi.applyF(arr=self._scaled_n) / self._time_support
 
@@ -66,10 +66,13 @@ class RadonOp(pyca.LinOp):
         """
         assert alpha.shape[-1] == self._dim
         arg = self.applyF(alpha)
-
         ret = pyffs.fs_interp(arg, self._time_support, self._t["start"], self._t["stop"], self._t["num"]).real
-        ret = ret.reshape(-1, self._output_dim)
-        return ret.squeeze()
+
+        if len(alpha.shape) > 1:
+            ret = ret.reshape(*alpha.shape[:-1], self._n_num, self._t["num"])
+            return ret.reshape(*alpha.shape[:-1], self._output_dim)
+        else:
+            return ret.reshape(self._n_num, self._t["num"]).ravel()
 
     def adjoint(self, arr: pyct.NDArray) -> pyct.NDArray:
         """
@@ -86,12 +89,14 @@ class RadonOp(pyca.LinOp):
         # Note: cannot use pyffs.fs_interp directly because Nt is not necessarily odd
 
         assert arr.shape[-1] == self._output_dim
-        arr = arr.reshape(-1, self._n_num, self._t["num"])
+        arr = arr.reshape(-1, self._n_num, self._t["num"])  # TODO: not -1 but *arr.shape[:-1] if len(arr.shape) > 1
+
         arr = self._adj_w_vect * arr
         arg = pyffs.czt(arr, A=1.0, W=self._adj_w, M=2 * self._time_bandwidth_product + 1, axis=-1)
+        arg = np.flip(arg, axis=-1)
         arg = self._adj_psi_applyF * arg
         arg = view_as_real(arg)
-        ret = self._nufft.adjoint(arg.flatten())
+        ret = self._nufft.adjoint(arg.ravel())
 
         ret = ret.squeeze()
         if not ret.shape:
@@ -106,7 +111,7 @@ class RadonOp(pyca.LinOp):
 
         Parameters
         ----------
-        alpha: (..., M)
+        alpha: (..., Q)
 
         Returns
         -------
