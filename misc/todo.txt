@@ -1,0 +1,130 @@
+Core-Team
+  Review StructureTensor
+
+Sepand
+  * Solver Tests
+      Remaining: opt/solver/pds.py
+  * Refactor docstrings, type hints, etc.
+      Remaining: opt/solver/pds.py
+  * Known Bugs
+    * General
+      * test_svdvals[SM, non-rectangular operators]
+        Returned values always wrong (esp. for fat arrays).
+        Probable cause: np.linalg.svd does not return the "true" singular values.
+    * Stencil
+      * test_value1D_svdvals[SM]
+        Always incorrect for ND kernels (seperable & non-seperable)
+        Did an experiment on NumPy backend:
+          Changing svds() seed gives different results.
+          Hunch: obtaining one of the smallest singular values, but not the smallest.
+        Values are not extravagant however: the failure is acceptable.
+    * Kron
+      * test_interface_jacobian() fails if kron(A, B) == LinFunc
+        and A (or B) is IdentityOp.
+        Reason: corner case where kr(A, B) is IdentityOp(dim=1).
+        Not a problem in practice.
+    * NUFFT
+      * test_value1D_svdvals() fails sometimes when k > 1.
+        Reason unknown.
+      * type[123]()
+        Some tests fail only with DASK inputs.
+        Reason unknown.
+      * test_math(\d*)_lipschitz() fails when calling hutchpp(): non-contiguous axis.
+    * Adam
+      * test_value_fit() fails.
+        This is expected since stochastic gradient estimate not guaranteed to always decrease the cost function.
+        If running the solver until convergence, we notice the cost function increases, then decreases.
+        Need to disable test_value_fit(), or xfail with error message?
+    * JAX interop
+      * The following tests fail with CuPy inputs (f32/f64), with mentioned errors. [Reason unknown.]
+        - TestJaxScaledSum::test_math_adjoint()
+            Execution of replica 0 failed: INVALID_ARGUMENT: Executable expected shape f32[20,1]{1,0} for argument 0 but got incompatible shape f32[20,1]{0,1}
+            Execution of replica 0 failed: INVALID_ARGUMENT: Executable expected shape f32[20,1]{1,0} for argument 1 but got incompatible shape f32[20,1]{0,1}
+            Execution of replica 0 failed: INVALID_ARGUMENT: Executable expected shape f64[20,1]{1,0} for argument 0 but got incompatible shape f64[20,1]{0,1}
+        - TestJaxScaledSum::test_math_cogram()
+            Execution of replica 0 failed: INVALID_ARGUMENT: Executable expected shape f32[30,1]{1,0} for argument 0 but got incompatible shape f32[30,1]{0,1}
+            Execution of replica 0 failed: INVALID_ARGUMENT: Executable expected shape f32[30,1]{1,0} for argument 1 but got incompatible shape f32[30,1]{0,1}
+            Execution of replica 0 failed: INVALID_ARGUMENT: Executable expected shape f64[30,1]{1,0} for argument 0 but got incompatible shape f64[30,1]{0,1}
+        - TestJaxSin::test_math_diff_lipschitz()
+        - TestJaxSquaredL2Norm::test_math_diff_lipschitz()
+        - TestJaxSquaredL2Norm2::test_math_diff_lipschitz()
+            Execution of replica 0 failed: INTERNAL: Address of buffer 0 must be a multiple of 10, but was 0x...
+            Execution of replica 0 failed: INTERNAL: Address of buffer 1 must be a multiple of 10, but was 0x...
+
+  * Test Suite Enhancements
+    * General
+      * Add @slow_test tags.
+      * Add alternative tox instance to run non-@slow_test tests.
+      * Add DASK_CUPY mode. [Only to the test suite.]
+        >>> with dask.config.set({"array.backend": "cupy"}):  # "numpy"
+        ...     darr = da.ones(10, chunks=(5,))  # Get cupy-backed collection
+    * NUFFT
+      * CuPy backend currently not tested since only kicks in/works when eps=0.
+        Enable CuPy backend once eps>0 case also becomes CuPy-capable.
+
+
+
+Thomas
+  * Design tests for sampler module
+  * When diff operators are merged, add examples in documentation of B-spline module (comparison splines vs. discrete model for nonuniform sampling)
+    and Sampler module (ULA with TV regularization)
+  * Long term for Sampler module : add documentation and utility functions to compute autocorrelation and effective sample size for MCMC models
+    (investigate if they can be approximated online)
+
+
+
+[HTML Documentation] Towards Pyxu v2 Public Release
+  [Matthieu] Introduction/Landing Page
+    Summary: what is Pyxu
+    Statement of need + comparison with other frameworks
+    Design principles
+
+  [Sepand] Installation Instructions
+    pip-based
+    dev environment (point to dev section)
+
+  [Matthieu] Tour of Pyxu in 15min
+    Walkthrough tomographic reconstruction
+      Normal equations
+      Gradient Descent without regularization term
+        \argmin_{x}\norm{y - Ax}{2}^{2}
+      More advanced methods
+        PDS/ADMM/PnP
+
+  [TBD] Tutorials Section
+
+  How-To Section
+    [Sepand] Operator arithmetic
+      Includes discussion on rules & lipschitz propagation
+    [Sepand] GPU support
+    [Sepand] DASK support
+      Includes GPU on DASK
+    [Sepand] Controlling Precision
+    [Sepand] Building Block Operators
+    [Matthieu] LinOps (array-based & matrix-free)
+    [Sepand] Vectorization
+    [Joan] Stencils / JIT
+    [Joan] Working with DiffOps
+    [Sepand] Working with (NU)FFTs
+    [Thomas] Perform Uncertainty Quantification
+    [Thomas] Iterative Solvers
+      Includes how to set up Lipschitz constants.
+    [Sepand] Dealing with Complex Numbers
+    [Sepand] Interoperability with Deep-Learning Frameworks
+
+  [Sepand] API Reference
+    Introduction to high-level structure of Pyxu, then
+    Alphabetic listing of all public API
+
+  Being a Developer
+    [Joan] Extending Pyxu
+      Using the cookie-cutter
+      Discovering extensions -> Pyxu FAIR
+
+    Roadmap
+    [TBD] How to contribute
+    Governance
+    Obtaining support
+    Subscribe to Mailing list
+    Geting a developer install
+      How to run tests

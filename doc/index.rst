@@ -1,201 +1,802 @@
-.. image:: /images/pycsou.png
-  :width: 50 %
-  :align: center
-  :target: https://github.com/matthieumeo/pycsou
+:html_theme.sidebar_secondary.remove:
+:sd_hide_title: true
 
-.. image:: https://zenodo.org/badge/277582581.svg
-   :target: https://zenodo.org/badge/latestdoi/277582581
+.. |br| raw:: html
 
+   </br>
 
-*Pycsou* is a Python 3 package for solving linear inverse problems with state-of-the-art proximal algorithms.
-The software implements in a highly modular way the main building blocks -cost functionals, penalty terms and linear operators- of generic penalised convex optimisation problems.
+.. raw:: html
 
-This Python library is inspired by the MATLAB `GlobalBioIm <https://github.com/Biomedical-Imaging-Group/GlobalBioIm>`_ project. The ``LinearOperator`` interface is based on `scipy.sparse <https://docs.scipy.org/doc/scipy/reference/sparse.html>`_  and `Pylops <https://pylops.readthedocs.io/en/latest/index.html>`_.
+    <!-- CSS overrides on the homepage only -->
+    <style>
+    .bd-main .bd-content .bd-article-container {
+    max-width: 70rem; /* Make homepage a little wider instead of 60em */
+    }
+    /* Extra top/bottom padding to the sections */
+    article.bd-article section {
+    padding: 3rem 0 7rem;
+    }
+    /* Override all h1 headers except for the hidden ones */
+    h1:not(.sd-d-none) {
+    font-size: 48px;
+    text-align: center;
+    margin-bottom: 4rem;
+    }
+    /* Override all h3 headers that are not in hero */
+    h3:not(#hero h3) {
+    font-weight: bold;
+    text-align: center;
+    }
 
-Inverse Problems in a Nutshell
-------------------------------
+    p {
+    text-align: justify;
+    }
 
-.. seealso::
-   See :ref:`theory` for a more in-depth discussion on the topic.
+    a:visited {
+    color: var(--pst-color-primary);
+    }
 
-Most real-life approximation problems can be formulated as *linear inverse problems*: 
-
-.. math:: 
-
-   \text{Find  }\mathbf{\alpha}\in\mathbb{R}^N &\text{ from noisy measurements } \mathbf{y}\sim \mathbf{Y}\\ 
-   &\text{ where } \mathbb{E}[\mathbf{Y}]=\mathbf{G}\mathbf{\alpha}\\
-   &\text{ and } \mathbf{G}:\mathbb{R}^N\to \mathbb{R}^L \text{ is a linear operator.}
-
-Such problems are in general **ill-posed**, i.e. attempting to directly solve the linear system :math:`\mathbf{y}=\mathbf{G}\alpha` may yield no solution, infinitely many solutions, or numerically unstable solutions. Therefore, linear inverse problems are commonly solved by means of a penalised optimisation problem, confronting the physical evidence to the analyst’s a priori beliefs about the solution (e.g. smoothness, sparsity) via a data-fidelity and regularisation term, respectively: 
-
-.. math::
-   :label: penalised_opt
-
-   \min_{\mathbf{\alpha}\in\mathbb{R}^N} \,F(\mathbf{y}, \mathbf{G} \mathbf{\alpha})\quad+\quad \lambda\mathcal{R}(\mathbf{\alpha}).
-
-* :math:`F:\mathbb{R}^L\times \mathbb{R}^L\rightarrow \mathbb{R}_+\cup\{+\infty\}` is called a **loss functional**, measuring the discrepancy between the observed and predicted measurements :math:`\mathbf{y}` and :math:`\mathbf{G}\mathbf{\alpha}` respectively.
-* :math:`\mathcal{R}:\mathbb{R}^N\to \mathbb{R}_+\cup\{+\infty\}` is a **penalty functional** favouring simple and well-behaved solutions (typically with a finite number of degrees of freedom). 
-* :math:`\lambda>0` is a **penalty parameter** which controls the amount of regularisation by putting the regularisation functional and the cost functional on a similar scale. 
-  
-.. warning::
-   
-   In this package, we assume the loss and penalty functionals to be proper, convex and  lower semi-continuous. 
-
-Features
---------
-
-Pycsou makes it very easy to construct and solve penalised optimisation problems à la :eq:`penalised_opt`:
-
-1. It offers a rich collection of linear operators, loss functionals and penalty functionals commonly used in practice. [#f1]_ 
-2. It implements *arithmetic operations* [#f2]_ for linear operators, loss functionals and penalty functionals, hence allowing to *add*, *substract*, *scale*, *compose*, *exponentiate* or *stack* [#f3]_ those various objects with one another and hence quickly design *custom complex optimisation problems*. 
-3. It implements a rich collection of **state-of-the-art iterative proximal algorithms**, [#f4]_  including **efficient primal-dual splitting methods** which involve only gradient steps, proximal steps and simple linear evaluations. 
-4. It supports *matrix-free linear operators*, [#f5]_ making it easy to work with large scale linear operators that *may not necessarily fit in memory*. Matrix-free linear operators can be implemented from scratch by subclassing the asbtract class :py:class:`~pycsou.core.linop.LinearOperator`, or built [#f6]_ from `Scipy sparse matrices <https://docs.scipy.org/doc/scipy/reference/sparse.html#sparse-matrix-classes>`_, `distributed Dask arrays <https://docs.dask.org/en/latest/array.html>`_ or `Pylops matrix-free operators <https://pylops.readthedocs.io/en/latest/api/index.html#linear-operators>`_ (which now support GPU computations).
-5. It implements *automatic differentiation/proximation rules* [#f7]_, allowing to automatically compute the derivative/proximal operators of functionals constructed from arithmetic operations on common functionals shipped with Pycsou.
-6. It leverages powerful rule-of-thumbs for **setting automatically** the hyper-parameters of the provided proximal algorithms. 
-7. Pycsou is designed to easily interface with the packages `scipy.sparse <https://docs.scipy.org/doc/scipy/reference/sparse.html>`_  and `Pylops <https://pylops.readthedocs.io/en/latest/index.html>`_. This allows to use the sparse linear algebra routines from ``scipy.sparse`` on Pycsou :py:class:`~pycsou.core.linop.LinearOperator`, and  benefit from the `large catalogue <https://pylops.readthedocs.io/en/latest/api/index.html>`_ of linear operators and solvers from ``Pylops``. 
-   
-Usage
------
-
-Example 1
-~~~~~~~~~
-
-Consider the following optimisation problem:
-
-    .. math::
-
-       \min_{\mathbf{x}\in\mathbb{R}_+^N}\frac{1}{2}\left\|\mathbf{y}-\mathbf{G}\mathbf{x}\right\|_2^2\quad+\quad\lambda_1 \|\mathbf{D}\mathbf{x}\|_1\quad+\quad\lambda_2 \|\mathbf{x}\|_1,
-
-with :math:`\mathbf{D}\in\mathbb{R}^{N\times N}` the discrete derivative operator and :math:`\mathbf{G}\in\mathbb{R}^{L\times N}, \, \mathbf{y}\in\mathbb{R}^L, \lambda_1,\lambda_2>0.`
-This problem can be solved via the :py:class:`~pycsou.opt.proxalgs.PrimalDualSplitting` algorithm  with :math:`\mathcal{F}(\mathbf{x})= \frac{1}{2}\left\|\mathbf{y}-\mathbf{G}\mathbf{x}\right\|_2^2`, :math:`\mathcal{G}(\mathbf{x})=\lambda_2\|\mathbf{x}\|_1,`
-:math:`\mathcal{H}(\mathbf{x})=\lambda \|\mathbf{x}\|_1` and :math:`\mathbf{K}=\mathbf{D}`.
-
-.. plot::
-
-        import numpy as np
-        import matplotlib.pyplot as plt
-        from pycsou.linop.diff import FirstDerivative
-        from pycsou.func.loss import SquaredL2Loss
-        from pycsou.func.penalty import L1Norm, NonNegativeOrthant
-        from pycsou.linop.sampling import DownSampling
-        from pycsou.opt.proxalgs import PrimalDualSplitting
-
-        x = np.repeat([0, 2, 1, 3, 0, 2, 0], 10)
-        D = FirstDerivative(size=x.size, kind='forward')
-        D.compute_lipschitz_cst(tol=1e-3)
-        rng = np.random.default_rng(0)
-        G = DownSampling(size=x.size, downsampling_factor=3)
-        G.compute_lipschitz_cst()
-        y = G(x)
-        l22_loss = (1 / 2) * SquaredL2Loss(dim=G.shape[0], data=y)
-        F = l22_loss * G
-        lambda_ = 0.1
-        H = lambda_ * L1Norm(dim=D.shape[0])
-        G = 0.01 * L1Norm(dim=G.shape[1])
-        pds = PrimalDualSplitting(dim=G.shape[1], F=F, G=G, H=H, K=D, verbose=None)
-        estimate, converged, diagnostics = pds.iterate()
-        plt.figure()
-        plt.stem(x, linefmt='C0-', markerfmt='C0o')
-        plt.stem(estimate['primal_variable'], linefmt='C1--', markerfmt='C1s')
-        plt.legend(['Ground truth', 'PDS Estimate'])
-        plt.show()
-
-Example 2
-~~~~~~~~~
-
-Consider the *LASSO problem*:
-
-    .. math::
-
-       \min_{\mathbf{x}\in\mathbb{R}^N}\frac{1}{2}\left\|\mathbf{y}-\mathbf{G}\mathbf{x}\right\|_2^2\quad+\quad\lambda \|\mathbf{x}\|_1,
-
-with :math:`\mathbf{G}\in\mathbb{R}^{L\times N}, \, \mathbf{y}\in\mathbb{R}^L, \lambda>0.` This problem can be solved via :py:class:`~pycsou.opt.proxalgs.APGD` with :math:`\mathcal{F}(\mathbf{x})= \frac{1}{2}\left\|\mathbf{y}-\mathbf{G}\mathbf{x}\right\|_2^2` and :math:`\mathcal{G}(\mathbf{x})=\lambda \|\mathbf{x}\|_1`. We have:
-
-    .. math::
-
-       \mathbf{\nabla}\mathcal{F}(\mathbf{x})=\mathbf{G}^T(\mathbf{G}\mathbf{x}-\mathbf{y}), \qquad  \text{prox}_{\lambda\|\cdot\|_1}(\mathbf{x})=\text{soft}_\lambda(\mathbf{x}).
-
-This yields the so-called *Fast Iterative Soft Thresholding Algorithm (FISTA)*, whose convergence is guaranteed for :math:`d>2` and :math:`0<\tau\leq \beta^{-1}=\|\mathbf{G}\|_2^{-2}`.
-
-    .. plot::
-
-       import numpy as np
-       import matplotlib.pyplot as plt
-       from pycsou.func.loss import SquaredL2Loss
-       from pycsou.func.penalty import L1Norm
-       from pycsou.linop.base import DenseLinearOperator
-       from pycsou.opt.proxalgs import APGD
-
-       rng = np.random.default_rng(0)
-       G = DenseLinearOperator(rng.standard_normal(15).reshape(3,5))
-       G.compute_lipschitz_cst()
-       x = np.zeros(G.shape[1])
-       x[1] = 1
-       x[-2] = -1
-       y = G(x)
-       l22_loss = (1/2) * SquaredL2Loss(dim=G.shape[0], data=y)
-       F = l22_loss * G
-       lambda_ = 0.9 * np.max(np.abs(F.gradient(0 * x)))
-       G = lambda_ * L1Norm(dim=G.shape[1])
-       apgd = APGD(dim=G.shape[1], F=F, G=None, acceleration='CD', verbose=None)
-       estimate, converged, diagnostics = apgd.iterate()
-       plt.figure()
-       plt.stem(x, linefmt='C0-', markerfmt='C0o')
-       plt.stem(estimate['iterand'], linefmt='C1--', markerfmt='C1s')
-       plt.legend(['Ground truth', 'LASSO Estimate'])
-       plt.show()
-
-Cite
-----
-
-For citing this package, please see: 
-
-.. image:: https://zenodo.org/badge/277582581.svg
-   :target: https://zenodo.org/badge/latestdoi/277582581
+    .homepage-button.primary-button:visited {
+    color: var(--pst-color-background);
+    }
 
 
-.. rubric:: Footnotes
-   
-.. [#f1] See :ref:`operators`, :ref:`losses` and :ref:`penalties` respectively.
-.. [#f2] See for example the arithmetic methods from the abstract classes :py:class:`~pycsou.core.map.Map`, :py:class:`~pycsou.core.map.DifferentiableMap`, :py:class:`~pycsou.core.linop.LinearOperator`, :py:class:`~pycsou.core.functional.Functional`, :py:class:`~pycsou.core.functional.DifferentiableFunctional` and :py:class:`~pycsou.core.functional.ProximableFunctional`.
-.. [#f3] See :py:class:`~pycsou.core.map.MapStack`, :py:class:`~pycsou.core.map.DiffMapStack`, :py:class:`~pycsou.linop.base.LinOpStack`,  or :py:class:`~pycsou.func.base.ProxFuncHStack`.
-.. [#f4] See  :ref:`proxalgs`.
-.. [#f5] See  :py:class:`~pycsou.linop.base.LinearOperator`.
-.. [#f6] See  :py:class:`~pycsou.core.linop.SparseLinearOperator`, :py:class:`~pycsou.core.linop.DaskLinearOperator` and :py:class:`~pycsou.core.linop.PyLopLinearOperator`.
-.. [#f7] See :py:class:`~pycsou.core.map.DifferentiableMap` and :py:class:`~pycsou.core.functional.ProximableFunctional` for more on the topic.
+    .sponsors-list-item {
+    display: inline-flex;
+    justify-content: center;
+    opacity: 0.5;
+    filter: brightness(0.5) grayscale(1);
+    }
 
+    @keyframes platformsSlideshow {
+    100% {
+        transform: translateX(-2000px);
+    }
+    }
+    </style>
+
+.. raw:: html
+
+    <div id="hero">
+    <div id="hero-left">  <!-- Start Hero Left -->
+
+Pyxu
+====
+
+.. raw:: html
+
+    <h2 style="font-size: 60px; font-weight: bold; display: inline"><span>Pyxu</span></h2>
+    <h3 style="margin-top: 0; font-weight: bold; text-align: left; ">Modular & Scalable Computational Imaging</h3>
+    <p>
+    <strong> Pyxu </strong> (pronounced [piksu], formerly known as Pycsou) is an open-source Python framework allowing
+    scientists at any level to quickly prototype/deploy <em> hardware accelerated and out-of-core </em> computational
+    imaging pipelines at scale.
+    Thanks to its hardware-agnostic <strong>microservice architecture </strong> and its tight integration with the
+    PyData ecosystem, Pyxu supports a wide range of imaging applications, scales, and computation architectures.
+    </p>
+
+    <div class="homepage-button-container">
+    <div class="homepage-button-container-row">
+        <a href="./intro/index.html" class="homepage-button primary-button">Get Started</a>
+        <a href="./examples/index.html" class="homepage-button secondary-button">See Examples</a>
+    </div>
+    <div class="homepage-button-container-row">
+        <a href="./api/index.html" class="homepage-button-link">See API Reference →</a>
+    </div>
+    </div>
+    </div>  <!-- End Hero Left -->
+
+.. raw:: html
+
+    <div id="hero-right">  <!-- Start Hero Right -->
+
+.. image:: _static/microservice_hero.png
+
+
+.. raw:: html
+
+    </div>  <!-- End Hero Right -->
+    </div>  <!-- End Hero -->
+    <div style="padding-bottom: 60px;">
+
+.. grid:: 4 4 8 8
+    :gutter: 2
+
+    .. grid-item-card::
+        :shadow: none
+        :class-card: sd-border-0
+        :img-background: ./_static/grid_denoising.png
+
+    .. grid-item-card::
+        :shadow: none
+        :class-card: sd-border-0
+        :img-background: ./_static/grid_deblurring.png
+
+    .. grid-item-card::
+        :shadow: none
+        :class-card: sd-border-0
+        :img-background: ./_static/grid_inpainting.png
+
+    .. grid-item-card::
+        :shadow: none
+        :class-card: sd-border-0
+        :img-background: ./_static/grid_superresolution.png
+
+    .. grid-item-card::
+        :shadow: none
+        :class-card: sd-border-0
+        :img-background: ./_static/grid_demultiplexing.png
+
+    .. grid-item-card::
+        :shadow: none
+        :class-card: sd-border-0
+        :img-background: ./_static/grid_interferometry.png
+
+    .. grid-item-card::
+        :shadow: none
+        :class-card: sd-border-0
+        :img-background: ./_static/grid_fusion.png
+
+    .. grid-item-card::
+        :shadow: none
+        :class-card: sd-border-0
+        :img-background: ./_static/grid_tomography.png
+
+
+
+.. raw:: html
+
+    </div>
+
+
+
+Key Features & Capabilities
+===========================
+
+.. grid:: 2 2 2 3
+    :gutter: 3
+
+    .. grid-item-card::
+            :shadow: none
+            :class-card: sd-border-0
+
+            .. figure:: ./_static/microservice.png
+               :scale: 5%
+               :class: no-scaled-link
+
+            .. raw:: html
+
+                <p style="text-align: center;">
+                <strong> Microservice architecture </strong> <br/>
+                Loosely coupled software components that are composable via an advanced <em> operator algebra</em>.
+                </p>
+
+
+
+    .. grid-item-card::
+            :shadow: none
+            :class-card: sd-border-0
+
+            .. figure:: ./_static/pnp.png
+               :scale: 5%
+               :class: no-scaled-link
+
+            .. raw:: html
+
+                <p style="text-align: center;">
+                <strong> Plug-and-play API </strong> <br/>
+                Simple interface for beginners with theory-informed automatic hyperparameter selection.
+                Experts may still fine-tune parameters via a <em> guru </em> interface.
+                </p>
+
+
+    .. grid-item-card::
+            :shadow: none
+            :class-card: sd-border-0
+
+            .. figure:: ./_static/scope.png
+               :scale: 4%
+               :class: no-scaled-link
+
+            .. raw:: html
+
+                <p style="text-align: center;">
+                <strong> Application agnostic </strong> <br/>
+                Generic software components with wide applicability across imaging modalities.
+                </p>
+
+
+    .. grid-item-card::
+            :shadow: none
+            :class-card: sd-border-0
+
+            .. figure:: ./_static/hybrid.png
+               :scale: 4%
+               :class: no-scaled-link
+
+            .. raw:: html
+
+                <p style="text-align: center;">
+                <strong> Flexible computation backends </strong> <br/>
+                The same code executes for multiple array backends, including CPU and GPU, with a unified, easily
+                maintainable codebase.
+                </p>
+
+
+    .. grid-item-card::
+            :shadow: none
+            :class-card: sd-border-0
+
+            .. figure:: ./_static/hpc.png
+               :scale: 5%
+               :class: no-scaled-link
+
+            .. raw:: html
+
+                <p style="text-align: center;">
+                <strong> High-performance computing </strong> <br/>
+                Just-in-time compilation, batch processing, automatic parallelization, out-of-core computing, and
+                controllable computation precision.
+                </p>
+
+
+    .. grid-item-card::
+            :shadow: none
+            :class-card: sd-border-0
+
+            .. figure:: ./_static/interop.png
+               :scale: 4%
+               :class: no-scaled-link
+
+            .. raw:: html
+
+                <p style="text-align: center;">
+                <strong> Interoperability </strong> <br/>
+                Pyxu is highly interoperable with the <em>PyData stack</em>, including full-fledged zero-copy wrappers
+                for <a href="https://jax.readthedocs.io/en/latest/">JAX</a> and <a
+                href="https://pytorch.org/">PyTorch</a> operators.
+                </p>
+
+    .. grid-item-card::
+            :shadow: none
+            :class-card: sd-border-0
+
+            .. figure:: ./_static/test.png
+               :scale: 4%
+               :class: no-scaled-link
+
+            .. raw:: html
+
+                <p style="text-align: center;">
+                <strong> Quality controlled </strong> <br/>
+                Extensive logical and functional unit testing of software components.
+                Templated test classes for custom operators.
+                </p>
+
+    .. grid-item-card::
+            :shadow: none
+            :class-card: sd-border-0
+
+            .. figure:: ./_static/git.png
+               :scale: 4%
+               :class: no-scaled-link
+
+            .. raw:: html
+
+                <p style="text-align: center;">
+                <strong> Community driven </strong> <br/>
+                Pyxu is open source, version controlled, and is available to all on <a
+                href="https://pypi.org/project/pyxu/">PyPI</a> and <a
+                href="https://github.com/matthieumeo/pyxu">GitHub</a>.
+                </p>
+
+    .. grid-item-card::
+            :shadow: none
+            :class-card: sd-border-0
+
+            .. figure:: ./_static/fair.png
+               :scale: 4%
+               :class: no-scaled-link
+
+            .. raw:: html
+
+                <p style="text-align: center;">
+                <strong> Extensible </strong> <br/>
+                Powerful plugin mechanism and community marketplace (<a href="./fair/index.html">Pyxu FAIR</a>) for
+                discovering and sharing custom operators.
+                </p>
+
+Ecosystem
+=========
+
+Pyxu is highly interoperable with the wider scientific Python ecosystem.
+It is built on a minimal set of foundational and robust scientific computing librairies from the PyData stack.
+Pyxu notably supports multiple array backends --`NumPy <https://numpy.org/>`_, `Dask <https://www.dask.org/>`_, `Sparse
+<https://sparse.pydata.org/en/stable/>`_ and optionally `CuPy <https://cupy.dev/>`_--, allowing users to choose array
+backends that work best for their application/computation.
+Aside from `SciPy <https://scipy.org/>`_ and  `Numba <https://numba.pydata.org/>`_ -- which we use for scientific
+computing and `JIT-compilation <https://numba.readthedocs.io/en/stable/user/5minguide.html#how-does-numba-work>`_
+respectively-- these are Pyxu's **only** dependencies, making the software very easy to ship, install, deploy in
+production, and sustain in the long term.
+
+Pyxu is also interoperable with (but does not depend on) major deep learning frameworks such as `JAX
+<https://jax.readthedocs.io/en/latest/>`_ and `PyTorch <https://pytorch.org/>`_, allowing users to benefit from the
+latest incursions of deep learning in the field of computational imaging (e.g., PnP methods, unrolled neural networks,
+deep generative priors).
+Our wrappers can moreover leverage the autograd engine to auto-infer gradients or adjoint operations.
+
+
+.. grid:: 2 2 4 4
+    :gutter: 3
+
+    .. grid-item-card::
+            :shadow: none
+            :class-card: sd-border-0
+
+            .. image:: _static/numpy_logo.svg
+               :width: 75%
+               :align: center
+               :alt: NumPy's logo
+               :target: https://numpy.org/
+
+
+            .. raw:: html
+
+                <p style="text-align: center;">
+                Foundational package for array computing in Python.
+                </p>
+
+    .. grid-item-card::
+            :shadow: none
+            :class-card: sd-border-0
+
+            .. image:: _static/dask_horizontal.svg
+               :width: 70%
+               :align: center
+               :alt: Dask's logo
+               :target: https://www.dask.org/
+
+
+            .. raw:: html
+
+                <p style="text-align: center;">
+                NumPy-compatible distributed arrays and advanced parallelism for both in and out-of-core computing,
+                enabling performance at scale.
+                </p>
+
+    .. grid-item-card::
+            :shadow: none
+            :class-card: sd-border-0
+
+            .. image:: _static/cupy.png
+               :width: 75%
+               :align: center
+               :alt: CuPy's logo
+               :target: https://cupy.dev/
+
+
+            .. raw:: html
+
+                <p style="text-align: center;">
+                NumPy-compatible array library for GPU-accelerated computing.
+                </p>
+
+    .. grid-item-card::
+            :shadow: none
+            :class-card: sd-border-0
+
+            .. image:: _static/sparse-logo.png
+               :width: 65%
+               :align: center
+               :alt: Sparse's logo
+               :target: https://sparse.pydata.org/en/stable/
+
+
+            .. raw:: html
+
+                <p style="text-align: center;">
+                Sparse multi-dimensional arrays for the PyData ecosystem.
+                </p>
+
+    .. grid-item-card::
+        :shadow: none
+        :class-card: sd-border-0
+
+        .. image:: _static/scipy.png
+            :width: 70%
+            :align: center
+            :alt: SciPy's logo
+            :target: https://scipy.org/
+
+
+        .. raw:: html
+
+            <p style="text-align: center;">
+            Fundamental algorithms for scientific computing.
+            </p>
+
+    .. grid-item-card::
+        :shadow: none
+        :class-card: sd-border-0
+
+        .. image:: _static/numba-blue-horizontal-rgb.svg
+            :width: 85%
+            :align: center
+            :alt: Numba's logo
+            :target: https://numba.pydata.org/
+
+
+        .. raw:: html
+
+            <p style="text-align: center;">
+            NumPy-aware dynamic compiler using <a href="https://llvm.org/">LLVM</a>.
+            </p>
+
+    .. grid-item-card::
+            :shadow: none
+            :class-card: sd-border-0
+
+            .. image:: _static/Pytorch_logo.png
+               :width: 75%
+               :align: center
+               :alt: PyTorch's logo
+               :target: https://pytorch.org/
+
+
+            .. raw:: html
+
+                <p style="text-align: center;">
+                Tensors and dynamic neural networks with strong GPU acceleration.
+                </p>
+
+    .. grid-item-card::
+            :shadow: none
+            :class-card: sd-border-0
+
+            .. image:: _static/jax_logo_250px.png
+               :width: 40%
+               :align: center
+               :alt: JAX's logo
+               :target: https://jax.readthedocs.io/en/latest/
+
+
+            .. raw:: html
+
+                <p style="text-align: center;">
+                Composable transformations of Python+NumPy programs: differentiate, vectorize, JIT to GPU/TPU, and more.
+                </p>
+
+.. figure:: ./_static/stack.png
+    :width: 70%
+    :class: no-scaled-link
+
+
+Governance and Team
+===================
+Pyxu is an **open-source project** developed and maintained primarily by members of the `EPFL Center for Imaging
+<https://imaging.epfl.ch/>`_, but the repository itself is public and external contributions are welcome.
+We are committed to keeping the project public and owned by the community through a meritocratic and consensus-based
+governance.
+Anyone with an interest in the project can join the community, contribute to the project design, and participate in the
+decision-making process.
+
+.. grid:: 1 2 3 3
+    :gutter: 3
+
+    .. grid-item-card::
+            :shadow: none
+            :class-card: sd-border-0
+
+            .. image:: _static/EPFL_Logo_Digital_BLACK_PROD.png
+               :width: 60%
+               :align: center
+               :target: https://www.epfl.ch/en/
+
+    .. grid-item-card::
+            :shadow: none
+            :class-card: sd-border-0
+
+            .. image:: _static/imaging.png
+               :width: 60%
+               :align: center
+               :target: https://imaging.epfl.ch/
+
+    .. grid-item-card::
+            :shadow: none
+            :class-card: sd-border-0
+
+            .. image:: _static/air.svg
+               :width: 40%
+               :align: center
+
+Steering Council
+----------------
+
+The role of Pyxu's Steering Council is to ensure the long-term sustainability of the project, both technically and as a
+community.  Pyxu's Steering Council meets regularly (every two weeks or so) and currently consists of the following
+members:
+
+.. grid:: 2 2 3 3
+    :gutter: 3
+
+    .. grid-item-card::
+            :shadow: none
+            :class-card: sd-border-0
+
+            .. image:: _static/simeoni.png
+               :width: 40%
+               :align: center
+               :target: https://github.com/matthieumeo
+
+
+            .. raw:: html
+
+                <p style="text-align: center;">
+                <strong> Matthieu Simeoni </strong> <br/>
+                Pyxu's creator/architect, project manager & team lead
+                </p>
+
+
+    .. grid-item-card::
+            :shadow: none
+            :class-card: sd-border-0
+
+            .. image:: _static/kashani.png
+               :width: 40%
+               :align: center
+               :target: https://github.com/SepandKashani
+
+
+            .. raw:: html
+
+                <p style="text-align: center;">
+                <strong> Sepand Kashani </strong> <br/>
+                Technical lead, software architect & tests
+                </p>
+
+    .. grid-item-card::
+            :shadow: none
+            :class-card: sd-border-0
+
+            .. image:: _static/rue_queralt.png
+               :width: 40%
+               :align: center
+               :target: https://github.com/joanrue
+
+
+            .. raw:: html
+
+                <p style="text-align: center;">
+                <strong> Joan Rué-Queralt </strong> <br/>
+                Technical lead, solution architect & plugins
+                </p>
+
+Contributors
+------------
+In addition to the steering council, the following people are currently (or have been in the past) core contributors to
+Pyxu's development and/or maintenance (alphabetical order, full list available on GitHub):
+
+.. grid:: 2 2 3 3
+    :gutter: 3
+
+    .. grid-item-card::
+            :shadow: none
+            :class-card: sd-border-0
+
+            .. image:: _static/debarre.png
+               :width: 40%
+               :align: center
+               :target: https://github.com/ThomasDeb
+
+
+            .. raw:: html
+
+                <p style="text-align: center;">
+                <strong> Thomas Debarre </strong> <br>
+                Core contributor (Emeritus)
+                </p>
+
+    .. grid-item-card::
+            :shadow: none
+            :class-card: sd-border-0
+
+            .. image:: _static/flowers.png
+               :width: 40%
+               :align: center
+               :target: https://github.com/alec-flowers
+
+
+            .. raw:: html
+
+                <p style="text-align: center;">
+                <strong> Alec Flowers </strong> <br/>
+                Contributor (Emeritus)
+                </p>
+
+    .. grid-item-card::
+            :shadow: none
+            :class-card: sd-border-0
+
+            .. image:: _static/hamm.png
+               :width: 40%
+               :align: center
+               :target: https://github.com/dhamm97
+
+
+            .. raw:: html
+
+                <p style="text-align: center;">
+                <strong> Daniele Hamm </strong> <br/>
+                Contributor
+                </p>
+
+    .. grid-item-card::
+            :shadow: none
+            :class-card: sd-border-0
+
+            .. image:: _static/jarret.png
+               :width: 40%
+               :align: center
+               :target: https://github.com/AdriaJ
+
+
+            .. raw:: html
+
+                <p style="text-align: center;">
+                <strong> Adrian Jarret </strong><br/>
+                Contributor
+                </p>
+
+    .. grid-item-card::
+            :shadow: none
+            :class-card: sd-border-0
+
+            .. image:: _static/salim.png
+               :width: 40%
+               :align: center
+               :target: https://github.com/Dicedead
+
+
+            .. raw:: html
+
+                <p style="text-align: center;">
+                <strong> Salim Najib </strong><br/>
+                Contributor
+                </p>
+
+    .. grid-item-card::
+            :shadow: none
+            :class-card: sd-border-0
+
+            .. image:: _static/okumus.png
+               :width: 40%
+               :align: center
+               :target: https://github.com/okumuskaan
+
+
+            .. raw:: html
+
+                <p style="text-align: center;">
+                <strong> Kaan Okumus </strong> <br/>
+                Contributor (Emeritus)
+                </p>
+
+Partners & Sponsors
+===================
+
+.. raw:: html
+
+
+    <div class="sponsors-inner" style="color: #fff;
+    text-align: left;
+    overflow: hidden;
+    height: 92px;
+    position: relative;
+    transform: translate3d(0, 0, 0);
+    z-index: 1;">
+    <div class="sponsors-list" style="width: 4000px;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: space-between;
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    transform: translate3d(0, 0, 0);
+    animation: platformsSlideshow 60s linear 0s infinite;
+    padding: 0 40px;
+    box-sizing: border-box;">
+
+    <div class="sponsors-list-item">
+
+    <img width="100" alt="EPFL Slider" src="_static/EPFL_Logo_Digital_BLACK_PROD.png">
+
+    </div>
+    <div class="sponsors-list-item">
+
+    <img width="150" alt="Imaging Slider" src="_static/imaging.png">
+
+    </div>
+    <div class="sponsors-list-item">
+
+    <img width="100" alt="LCAV Slider" src="_static/LCAV_LOGO.png">
+
+    </div>
+    <div class="sponsors-list-item">
+
+    <img width="130" alt="Meta Slider" src="_static/Meta-Logo.png">
+
+    </div>
+    <div class="sponsors-list-item">
+
+    <img width="130" alt="SKACH Slider" style="padding: 0px 0px 30px 0px;" src="_static/skach.png">
+
+    </div>
+    <div class="sponsors-list-item">
+
+    <img width="170" alt="ETH Slider" src="_static/ethr_en_rgb_black.png">
+
+    </div>
+    <div class="sponsors-list-item">
+
+    <img width="170" alt="SNF Slider" src="_static/SNF_logo_standard_office_color_pos_e.png">
+
+    </div>
+    <div class="sponsors-list-item">
+
+    <img width="170" alt="SPC Slider" src="_static/spc.png">
+    </div>
+
+    <div class="sponsors-list-item">
+
+    <img width="100" alt="EPFL Slider" src="_static/EPFL_Logo_Digital_BLACK_PROD.png">
+
+    </div>
+    <div class="sponsors-list-item">
+
+    <img width="150" alt="Imaging Slider" src="_static/imaging.png">
+
+    </div>
+    <div class="sponsors-list-item">
+
+    <img width="100" alt="LCAV Slider" src="_static/LCAV_LOGO.png">
+
+    </div>
+    <div class="sponsors-list-item">
+
+    <img width="130" alt="Meta Slider" src="_static/Meta-Logo.png">
+
+    </div>
+    <div class="sponsors-list-item">
+
+    <img width="130" alt="SKACH Slider" style="padding: 0px 0px 30px 0px;" src="_static/skach.png">
+
+    </div>
+    <div class="sponsors-list-item">
+
+    <img width="170" alt="ETH Slider" src="_static/ethr_en_rgb_black.png">
+
+    </div>
+    <div class="sponsors-list-item">
+
+    <img width="170" alt="SNF Slider" src="_static/SNF_logo_standard_office_color_pos_e.png">
+
+    </div>
+    <div class="sponsors-list-item">
+
+    <img width="170" alt="SPC Slider" src="_static/spc.png">
+    </div>
+    </div>
+    </div>
 
 .. toctree::
    :maxdepth: 1
-   :caption: Getting Started
    :hidden:
 
-   general/install
-   general/theory
-   general/pycsou_classes
-   general/extensions
-   general/examples
-
-.. toctree::
-   :maxdepth: 2
-   :hidden:
-   :caption: Reference documentation
-
+   intro/index
+   guide/index
+   examples/index
    api/index
-   api/other
-
-
-.. toctree::
-   :maxdepth: 1
-   :hidden:
-   :caption: More
-
-   notes/index
-
-
-.. Indices and tables
-.. ==================
-
-.. * :ref:`genindex`
-.. * :ref:`modindex`
-.. * :ref:`search`
+   fair/index
