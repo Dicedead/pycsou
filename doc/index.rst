@@ -638,6 +638,11 @@ Partners & Sponsors
     </div>
     <div class="sponsors-list-item">
 
+    <img width="130" alt="Zeiss Slider" src="_static/Zeiss_logo.png">
+
+    </div>
+    <div class="sponsors-list-item">
+
     <img width="130" alt="SKACH Slider" style="padding: 0px 0px 30px 0px;" src="_static/skach.png">
 
     </div>
@@ -674,6 +679,11 @@ Partners & Sponsors
     <div class="sponsors-list-item">
 
     <img width="130" alt="Meta Slider" src="_static/Meta-Logo.png">
+
+    </div>
+    <div class="sponsors-list-item">
+
+    <img width="100" alt="ZEISS Slider" src="_static/Zeiss_logo.png">
 
     </div>
     <div class="sponsors-list-item">
