@@ -163,7 +163,7 @@ lcav = ReconstructionTechnique(
     op=unweighted_xrt.T,
     regularizer=PositiveOrthant(unweighted_xrt.codim),
     initialisation=0 * np.random.randn(unweighted_xrt.codim),
-    diff_lip=0.005,
+    diff_lip=500,
 )
 
 
