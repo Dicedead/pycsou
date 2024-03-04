@@ -105,10 +105,10 @@ sphere_inner = cylinder_inner_radius / 3
 sphere_outer = cylinder_inner_radius / 2
 center = np.r_[0, 0, cylinder_max_height / 2]
 
-num_n = 1500
+num_n = 1000
 bin_size = 1
-slm_pixels_height = 200
-slm_pixels_width = 512
+slm_pixels_height = 100
+slm_pixels_width = 200
 
 origin = 0
 vox_side = 13.7e-5
@@ -118,7 +118,7 @@ pitch = vox_side * np.array([1.0, 1.0, 1.0])
 
 # ground_truth = hollow_sphere(sphere_inner, sphere_outer, cylinder_outer_radius, cylinder_max_height, xy_pixels, z_pixels, center)
 print("Loading ground truth...")
-ground_truth = benchy()
+ground_truth = bunny()
 
 print("Creating rays...")
 num_heights = slm_pixels_height // bin_size
