@@ -117,8 +117,10 @@ max_offset = cylinder_outer_radius / 10
 pitch = vox_side * np.array([1.0, 1.0, 1.0])
 
 # ground_truth = hollow_sphere(sphere_inner, sphere_outer, cylinder_outer_radius, cylinder_max_height, xy_pixels, z_pixels, center)
+print("Loading ground truth...")
 ground_truth = benchy()
 
+print("Creating rays...")
 num_heights = slm_pixels_height // bin_size
 num_offsets = slm_pixels_width // bin_size
 
@@ -141,6 +143,7 @@ t_spec += np.r_[pitch[:2], 0] * xy_pixels / 2
 n_spec = n_spec.reshape(-1, 3)
 t_spec = t_spec.reshape(-1, 3)
 
+print("Building operator...")
 unweighted_xrt = xray.XRayTransform.init(
     arg_shape=ground_truth.shape,
     origin=origin,
@@ -151,8 +154,9 @@ unweighted_xrt = xray.XRayTransform.init(
     w_spec=None,
 )
 
-fig = unweighted_xrt.diagnostic_plot()
-fig.savefig("./diag.png")
+# print("Diagnostic plot...")
+# fig = unweighted_xrt.diagnostic_plot()
+# fig.savefig("./diag.png")
 
 lcav = ReconstructionTechnique(
     ground_truth=ground_truth,
