@@ -50,7 +50,7 @@ class ReconstructionTechnique:
     initialisation: pxt.NDArray
     diff_lip: float
 
-    def run(self, save_file, stop_crit=(RelError(eps=1e-4) | MaxIter(1000)), post_process_optres=None):
+    def run(self, save_file, stop_crit=RelError(eps=5e-3) | MaxIter(500), post_process_optres=None):
         data_fidelity = SquaredL2Norm(np.prod(self.ground_truth.shape)).argshift(-self.ground_truth.flatten()) * self.op
         pgd = PGD(data_fidelity, self.regularizer)
         pgd.fit(x0=self.initialisation, stop_crit=stop_crit, track_objective=True, tau=1 / self.diff_lip)
