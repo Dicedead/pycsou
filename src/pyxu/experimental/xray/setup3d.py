@@ -13,7 +13,7 @@ import pyxu.util as pxu
 from pyxu.abc import DiffMap, ProxFunc
 from pyxu.operator import PositiveOrthant, SquaredL2Norm
 from pyxu.opt.solver import PGD
-from pyxu.opt.stop import RelError
+from pyxu.opt.stop import MaxIter, RelError
 
 
 class SigLU(pxa.DiffMap):
@@ -50,12 +50,13 @@ class ReconstructionTechnique:
     initialisation: pxt.NDArray
     diff_lip: float
 
-    def run(self, stop_crit=RelError(eps=5e-3), post_process_optres=None):
+    def run(self, save_file, stop_crit=(RelError(eps=1e-4) | MaxIter(1000)), post_process_optres=None):
         data_fidelity = SquaredL2Norm(np.prod(self.ground_truth.shape)).argshift(-self.ground_truth.flatten()) * self.op
         pgd = PGD(data_fidelity, self.regularizer)
         pgd.fit(x0=self.initialisation, stop_crit=stop_crit, track_objective=True, tau=1 / self.diff_lip)
         alpha, _ = pgd.stats()
         alpha = alpha["x"]
+        np.save(save_file, alpha)
 
         if post_process_optres is not None:
             alpha = post_process_optres(alpha)
@@ -96,7 +97,7 @@ z_pixels = 100
 
 cylinder_inner_radius = 15.5e-3
 cylinder_outer_radius = 16.5e-3
-cylinder_max_height = 0.0105216 * 2
+cylinder_max_height = 0.0105216 * 3
 cylinder_min_height = 0
 assert cylinder_inner_radius < cylinder_outer_radius
 
@@ -104,10 +105,10 @@ sphere_inner = cylinder_inner_radius / 3
 sphere_outer = cylinder_inner_radius / 2
 center = np.r_[0, 0, cylinder_max_height / 2]
 
-num_n = 300
+num_n = 1500
 bin_size = 1
-slm_pixels_height = 100
-slm_pixels_width = 100
+slm_pixels_height = 200
+slm_pixels_width = 512
 
 origin = 0
 vox_side = 13.7e-5
@@ -158,7 +159,7 @@ lcav = ReconstructionTechnique(
     op=unweighted_xrt.T,
     regularizer=PositiveOrthant(unweighted_xrt.codim),
     initialisation=0 * np.random.randn(unweighted_xrt.codim),
-    diff_lip=4000,
+    diff_lip=0.005,
 )
 
 
@@ -172,7 +173,8 @@ def threshold_processing(image):
 
 
 def run():
-    lcav_img = lcav.run()
+    save_file = "solutions/alpha.npy"
+    lcav_img = lcav.run(save_file)
     lcav_img = threshold_processing(lcav_img)
 
     fig = plt.figure(figsize=plt.figaspect(0.5))
