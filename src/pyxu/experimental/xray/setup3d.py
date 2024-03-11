@@ -50,7 +50,7 @@ class ReconstructionTechnique:
     initialisation: pxt.NDArray
     diff_lip: float
 
-    def run(self, save_file, stop_crit=RelError(eps=5e-3) | MaxIter(500), post_process_optres=None):
+    def run(self, save_file, stop_crit=RelError(eps=1e-3) | MaxIter(60), post_process_optres=None):
         data_fidelity = SquaredL2Norm(np.prod(self.ground_truth.shape)).argshift(-self.ground_truth.flatten()) * self.op
         pgd = PGD(data_fidelity, self.regularizer)
         pgd.fit(x0=self.initialisation, stop_crit=stop_crit, track_objective=True, tau=1 / self.diff_lip)
@@ -85,6 +85,10 @@ def nut(path="npys/nut_zres100.npy"):
 
 
 def bunny(path="npys/bunny_zres_100.npy"):
+    return 1 * np.load(path)
+
+
+def bunny_reweighted(path="npys/bunny_zres_100_reweighted.npy"):
     return 1 * np.load(path)
 
 
@@ -154,7 +158,7 @@ unweighted_xrt = xray.XRayTransform.init(
     w_spec=None,
 )
 
-# print("Diagnostic plot...")
+print("Diagnostic plot...")
 # fig = unweighted_xrt.diagnostic_plot()
 # fig.savefig("./diag.png")
 
@@ -163,12 +167,12 @@ lcav = ReconstructionTechnique(
     op=unweighted_xrt.T,
     regularizer=PositiveOrthant(unweighted_xrt.codim),
     initialisation=0 * np.random.randn(unweighted_xrt.codim),
-    diff_lip=500,
+    diff_lip=5,
 )
 
 
-def threshold_processing(image):
-    otsu = skimage.filters.threshold_otsu(image, nbins=2)
+def threshold_processing(image, divider=1.0):
+    otsu = skimage.filters.threshold_otsu(image, nbins=2) / divider
     print(otsu)
     res = image.copy()
     res[image < otsu] = 0
@@ -192,3 +196,20 @@ def run():
 
 if __name__ == "__main__":
     run()
+    # lcav_img = np.load("solutions/alpha.npy")
+    # lcav_img = unweighted_xrt.adjoint(lcav_img).reshape(ground_truth.shape)
+    #
+    # fig = plt.figure(figsize=plt.figaspect(0.5))
+    # ax1 = fig.add_subplot(1, 4, 1, projection="3d")
+    # ax1.voxels(threshold_processing(lcav_img))
+    #
+    # ax2 = fig.add_subplot(1, 4, 2, projection="3d")
+    # ax2.voxels(ground_truth)
+    #
+    # ax3 = fig.add_subplot(1, 4, 3, projection="3d")
+    # ax3.voxels(threshold_processing(lcav_img, 4))
+    #
+    # ax4 = fig.add_subplot(1, 4, 4, projection="3d")
+    # ax4.voxels(threshold_processing(lcav_img, 40))
+    #
+    # fig.savefig("3dtests.png")
