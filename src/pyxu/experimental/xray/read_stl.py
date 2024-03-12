@@ -23,7 +23,7 @@ def read_stl_file(stl_path, png_path, npy_path, resolution=100):
     array = np.stack(arrays, axis=2)
 
     summation = array.sum(axis=(1, 2), keepdims=True)
-    array = array / np.maximum(np.ones_like(summation), np.sqrt(summation))
+    array = array / np.maximum(np.ones_like(summation), summation)
 
     np.save(npy_path, array)
 
