@@ -122,7 +122,7 @@ pitch = vox_side * np.array([1.0, 1.0, 1.0])
 
 # ground_truth = hollow_sphere(sphere_inner, sphere_outer, cylinder_outer_radius, cylinder_max_height, xy_pixels, z_pixels, center)
 print("Loading ground truth...")
-ground_truth = bunny()
+ground_truth = bunny_reweighted()
 
 print("Creating rays...")
 num_heights = slm_pixels_height // bin_size
