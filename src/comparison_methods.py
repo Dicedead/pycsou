@@ -290,7 +290,7 @@ if __name__ == "__main__":
         ["GT low", "Low", "GT high", "High"],
         "With thresholding",
         "with_thresholding_part1.png",
-        processing=[threshold_processing] * 4,
+        processing=[lambda x: x, threshold_processing, lambda x: x, threshold_processing],
     )
 
     plot_four_images(
@@ -305,5 +305,5 @@ if __name__ == "__main__":
         ["GT mid 1", "Mid 1", "GT mid 2", "Mid 2"],
         "With thresholding",
         "with_thresholding_part2.png",
-        processing=[threshold_processing] * 4,
+        processing=[lambda x: x, threshold_processing, lambda x: x, threshold_processing],
     )
