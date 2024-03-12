@@ -67,7 +67,7 @@ class ReconstructionTechnique:
 side = 512
 gamma = 0.3
 beta = 15
-num_n = 300
+num_n = 1000
 num_t = 350
 lambda_ = 4
 transmittance_ratio = 0.6  # I_center = trans_ratio * I_0
