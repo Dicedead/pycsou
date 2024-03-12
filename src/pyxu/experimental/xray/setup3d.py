@@ -195,21 +195,21 @@ def run():
 
 
 if __name__ == "__main__":
-    run()
-    # lcav_img = np.load("solutions/alpha.npy")
-    # lcav_img = unweighted_xrt.adjoint(lcav_img).reshape(ground_truth.shape)
-    #
-    # fig = plt.figure(figsize=plt.figaspect(0.5))
-    # ax1 = fig.add_subplot(1, 4, 1, projection="3d")
-    # ax1.voxels(threshold_processing(lcav_img))
-    #
-    # ax2 = fig.add_subplot(1, 4, 2, projection="3d")
-    # ax2.voxels(ground_truth)
-    #
-    # ax3 = fig.add_subplot(1, 4, 3, projection="3d")
-    # ax3.voxels(threshold_processing(lcav_img, 4))
-    #
-    # ax4 = fig.add_subplot(1, 4, 4, projection="3d")
-    # ax4.voxels(threshold_processing(lcav_img, 40))
-    #
-    # fig.savefig("3dtests.png")
+    # run()
+    lcav_img = np.load("solutions/alpha.npy")
+    lcav_img = unweighted_xrt.adjoint(lcav_img).reshape(ground_truth.shape)
+
+    fig = plt.figure(figsize=plt.figaspect(0.5))
+    ax1 = fig.add_subplot(1, 4, 1, projection="3d")
+    ax1.voxels(threshold_processing(lcav_img))
+
+    ax2 = fig.add_subplot(1, 4, 2, projection="3d")
+    ax2.voxels(ground_truth)
+
+    ax3 = fig.add_subplot(1, 4, 3, projection="3d")
+    ax3.voxels(threshold_processing(lcav_img, 4))
+
+    ax4 = fig.add_subplot(1, 4, 4, projection="3d")
+    ax4.voxels(threshold_processing(lcav_img, 40))
+
+    fig.savefig("3dtests.png")
