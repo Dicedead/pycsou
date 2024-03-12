@@ -195,7 +195,7 @@ def run():
 
 
 if __name__ == "__main__":
-    # run()
+    run()
     lcav_img = np.load("solutions/alpha.npy")
     lcav_img = unweighted_xrt.adjoint(lcav_img).reshape(ground_truth.shape)
 
