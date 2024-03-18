@@ -92,7 +92,6 @@ Arithmetic Rules (low-level)
    pyxu.abc.arithmetic.ArgScaleRule
    pyxu.abc.arithmetic.ArgShiftRule
    pyxu.abc.arithmetic.ChainRule
-   pyxu.abc.arithmetic.PowerRule
    pyxu.abc.arithmetic.Rule
    pyxu.abc.arithmetic.ScaleRule
    pyxu.abc.arithmetic.TransposeRule
@@ -148,7 +147,6 @@ pyxu.info.ptype
    ~pyxu.info.ptype.NDArrayAxis
    ~pyxu.info.ptype.NDArrayShape
    ~pyxu.info.ptype.OpC
-   ~pyxu.info.ptype.OpShape
    ~pyxu.info.ptype.OpT
    ~pyxu.info.ptype.Path
    ~pyxu.info.ptype.Property
@@ -181,7 +179,6 @@ pyxu.math
 
    ~pyxu.math.backtracking_linesearch
    ~pyxu.math.hutchpp
-   ~pyxu.math.norm
    ~pyxu.math.trace
 
 pyxu.operator.interop
@@ -236,7 +233,6 @@ Norms & Loss Functions
    ~pyxu.operator.L2Norm
    ~pyxu.operator.LInfinityNorm
    ~pyxu.operator.PositiveL1Norm
-   ~pyxu.operator.shift_loss
    ~pyxu.operator.SquaredL1Norm
    ~pyxu.operator.SquaredL2Norm
 
@@ -245,8 +241,6 @@ Indicator Functions
 
 .. autosummary::
 
-   ~pyxu.operator.AffineSet
-   ~pyxu.operator.ConvexSetIntersection
    ~pyxu.operator.HyperSlab
    ~pyxu.operator.L1Ball
    ~pyxu.operator.L2Ball
@@ -278,7 +272,9 @@ Transforms
 .. autosummary::
 
    ~pyxu.operator.FFT
-   ~pyxu.operator.NUFFT
+   ~pyxu.operator.CZT
+   ~pyxu.operator.NUFFT1
+   ~pyxu.operator.NUFFT2
 
 Stencils & Convolutions
 +++++++++++++++++++++++
@@ -287,8 +283,11 @@ Stencils & Convolutions
 
    ~pyxu.operator.Convolve
    ~pyxu.operator.Correlate
+   ~pyxu.operator.FFTConvolve
+   ~pyxu.operator.FFTCorrelate
    ~pyxu.operator.Stencil
    ~pyxu.operator._Stencil
+   ~pyxu.operator.UniformSpread
 
 Filters
 +++++++
@@ -334,52 +333,52 @@ Misc
 
 .. autosummary::
 
+   ~pyxu.operator.BroadcastAxes
    ~pyxu.operator.ConstantValued
-   ~pyxu.operator.softmax
-   ~pyxu.operator.softplus
+   ~pyxu.operator.RechunkAxes
+   ~pyxu.operator.ReshapeAxes
+   ~pyxu.operator.SqueezeAxes
+   ~pyxu.operator.TransposeAxes
 
 Block-defined Operators
 ^^^^^^^^^^^^^^^^^^^^^^^
 
 .. autosummary::
 
-   ~pyxu.operator.block
    ~pyxu.operator.block_diag
-   ~pyxu.operator.coo_block
-   ~pyxu.operator.hstack
    ~pyxu.operator.stack
-   ~pyxu.operator.vstack
 
 Element-wise Operators
 ^^^^^^^^^^^^^^^^^^^^^^
 
 .. autosummary::
 
-   ~pyxu.operator.abs
-   ~pyxu.operator.arccos
-   ~pyxu.operator.arccosh
-   ~pyxu.operator.arcsin
-   ~pyxu.operator.arcsinh
-   ~pyxu.operator.arctan
-   ~pyxu.operator.arctanh
-   ~pyxu.operator.cbrt
-   ~pyxu.operator.clip
-   ~pyxu.operator.cos
-   ~pyxu.operator.cosh
-   ~pyxu.operator.exp
-   ~pyxu.operator.gaussian
-   ~pyxu.operator.leakyrelu
-   ~pyxu.operator.log
-   ~pyxu.operator.relu
-   ~pyxu.operator.sigmoid
-   ~pyxu.operator.sign
-   ~pyxu.operator.silu
-   ~pyxu.operator.sin
-   ~pyxu.operator.sinh
-   ~pyxu.operator.sqrt
-   ~pyxu.operator.square
-   ~pyxu.operator.tan
-   ~pyxu.operator.tanh
+   ~pyxu.operator.Abs
+   ~pyxu.operator.ArcCos
+   ~pyxu.operator.ArcCosh
+   ~pyxu.operator.ArcSin
+   ~pyxu.operator.ArcSinh
+   ~pyxu.operator.ArcTan
+   ~pyxu.operator.ArcTanh
+   ~pyxu.operator.Cbrt
+   ~pyxu.operator.Clip
+   ~pyxu.operator.Cos
+   ~pyxu.operator.Cosh
+   ~pyxu.operator.Exp
+   ~pyxu.operator.Gaussian
+   ~pyxu.operator.LeakyReLU
+   ~pyxu.operator.Log
+   ~pyxu.operator.ReLU
+   ~pyxu.operator.Sigmoid
+   ~pyxu.operator.Sign
+   ~pyxu.operator.SiLU
+   ~pyxu.operator.Sin
+   ~pyxu.operator.Sinh
+   ~pyxu.operator.SoftPlus
+   ~pyxu.operator.Sqrt
+   ~pyxu.operator.Square
+   ~pyxu.operator.Tan
+   ~pyxu.operator.Tanh
 
 Pulses
 ++++++
@@ -426,7 +425,6 @@ pyxu.opt.stop
 
    ~pyxu.opt.stop.AbsError
    ~pyxu.opt.stop.ManualStop
-   ~pyxu.opt.stop.MaxCarbon
    ~pyxu.opt.stop.MaxDuration
    ~pyxu.opt.stop.MaxIter
    ~pyxu.opt.stop.Memorize
@@ -464,9 +462,9 @@ Complex Number Handling
 
 .. autosummary::
 
-   ~pyxu.util.view_as_complex_mat
+   ~pyxu.util.as_real_op
+   ~pyxu.util.require_viewable
    ~pyxu.util.view_as_complex
-   ~pyxu.util.view_as_real_mat
    ~pyxu.util.view_as_real
 
 Operator-Related
@@ -474,6 +472,7 @@ Operator-Related
 
 .. autosummary::
 
+   ~pyxu.util.as_canonical_axes
    ~pyxu.util.as_canonical_shape
    ~pyxu.util.vectorize
 
@@ -484,9 +483,6 @@ Misc
 
    ~pyxu.util.copy_if_unsafe
    ~pyxu.util.import_module
-   ~pyxu.util.infer_composition_shape
-   ~pyxu.util.infer_sum_shape
-   ~pyxu.util.next_fast_len
    ~pyxu.util.parse_params
    ~pyxu.util.read_only
 
@@ -496,8 +492,6 @@ Misc
 
    pyxu.util.misc.peaks
    pyxu.util.misc.star_like_sample
-   pyxu.util.operator._array_ize
-   pyxu.util.operator._dask_zip
 
 .. toctree::
    :maxdepth: 2

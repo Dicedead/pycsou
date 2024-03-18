@@ -74,7 +74,7 @@ html_theme_options = {
     "icon_links": [
         {
             "name": "GitHub",
-            "url": "https://github.com/matthieumeo/pyxu",
+            "url": "https://github.com/pyxu-org/pyxu",
             "icon": "fa-brands fa-github",
         },
         {
@@ -106,7 +106,7 @@ html_theme_options = {
 }
 
 html_context = {
-    "github_user": "matthieumeo",
+    "github_user": "pyxu-org",
     "github_repo": "pyxu",
     "github_version": "main",
     "doc_path": "doc",
@@ -200,7 +200,6 @@ intersphinx_mapping = {  # We only include most useful doc-sets.
     "CuPy [latest]": ("https://docs.cupy.dev/en/latest/", None),
     "SciPy [latest]": ("https://docs.scipy.org/doc/scipy/", None),
     "Dask [stable]": ("https://docs.dask.org/en/stable/", None),
-    "Sparse [latest]": ("https://sparse.pydata.org/en/latest/", None),
     "Pytest [latest]": ("https://docs.pytest.org/en/latest/", None),
     "Matplotlib [stable]": ("https://matplotlib.org/stable/", None),
     "JAX [latest]": ("https://jax.readthedocs.io/en/latest/", None),
@@ -225,7 +224,6 @@ napoleon_type_aliases = {
     "NDArrayInfo": "~pyxu.info.deps.NDArrayInfo",
     "NDArrayShape": "~pyxu.info.ptype.NDArrayShape",
     "OpC": "~pyxu.info.ptype.OpC",
-    "OpShape": "~pyxu.info.ptype.OpShape",
     "OpT": "~pyxu.info.ptype.OpT",
     "Path": "~pyxu.info.ptype.Path",
     "Real": "~pyxu.info.ptype.Real",

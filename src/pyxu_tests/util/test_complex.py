@@ -1,4 +1,5 @@
 import collections.abc as cabc
+import itertools
 import warnings
 
 import numpy as np
@@ -8,6 +9,7 @@ import pyxu.info.deps as pxd
 import pyxu.info.ptype as pxt
 import pyxu.runtime as pxrt
 import pyxu.util as pxu
+import pyxu_tests.conftest as ct
 
 
 class ViewAs:
@@ -55,11 +57,13 @@ class ViewAs:
 
     @pytest.fixture
     def valid_data(self) -> tuple[np.ndarray, np.ndarray]:  # input -> output
-        # 1D inputs only. Tests needing ND inputs should augment accordingly.
+        # No stacking dimensions.
+        # Tests needing stacked inputs should augment accordingly.
         raise NotImplementedError
 
     @pytest.fixture
     def _valid_data(self, valid_data, xp, width_in_out):
+        # Same as valid_data(), but with right backend/width.
         return (
             xp.array(valid_data[0], dtype=width_in_out[0].value),
             xp.array(valid_data[1], dtype=width_in_out[1].value),
@@ -70,8 +74,15 @@ class ViewAs:
         with pytest.raises(Exception):
             func(non_array_input)
 
-    def test_fail_unrecognized_dtype(self, func, unrecognized_dtype):
-        array = np.arange(50).astype(unrecognized_dtype)
+    def test_fail_unrecognized_dtype(
+        self,
+        func,
+        valid_data,
+        unrecognized_dtype,
+    ):
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", np.ComplexWarning)
+            array = valid_data[0].astype(unrecognized_dtype)
         with pytest.raises(Exception):
             func(array)
 
@@ -90,7 +101,7 @@ class ViewAs:
         assert np.allclose(out, out_gt)
 
     def test_valueND(self, func, _valid_data):
-        sh_extra = (2, 1)  # prepend input/output shape by this amount.
+        sh_extra = (2, 1, 3)  # prepend input/output shape by this amount.
 
         in_ = _valid_data[0]
         in_ = np.broadcast_to(in_, (*sh_extra, *in_.shape))
@@ -128,13 +139,42 @@ class TestViewAsComplex(ViewAs):
 
     @pytest.fixture
     def valid_data(self):
-        in_ = np.arange(6)
-        out = np.r_[0, 2, 4] + 1j * np.r_[1, 3, 5]
+        N = 5
+        in_ = np.arange(2 * N).reshape(N, 2)
+        out = in_[:, 0] + 1j * in_[:, 1]
         return in_, out
 
     @pytest.fixture(params=[_.value for _ in list(pxrt.CWidth)])
     def no_op_dtype(self, request):
         return request.param
+
+    # Tests -----------------------------------------------
+    @pytest.mark.parametrize(
+        "shape",
+        [
+            (1,),
+            (5,),
+            (5, 1, 4),
+            (5, 10, 4),
+        ],
+    )
+    def test_chunk(self, shape, width):
+        # DASK-only: verify chunk structure:
+        # * unchanged in batch dimensions.
+        ndi = pxd.NDArrayInfo.DASK
+        xp = ndi.module()
+
+        rng = xp.random.default_rng()
+        x = rng.standard_normal(size=(*shape, 2), dtype=width.value)
+        x = ct.chunk_array(x, complex_view=True)
+
+        y = pxu.view_as_complex(x)
+
+        assert y.shape == shape
+        assert y.dtype == width.complex.value
+        assert y.chunks == x.chunks[:-1]
+        assert xp.allclose(y.real, x[..., 0]).compute()
+        assert xp.allclose(y.imag, x[..., 1]).compute()
 
 
 class TestViewAsReal(ViewAs):
@@ -150,119 +190,162 @@ class TestViewAsReal(ViewAs):
 
     @pytest.fixture
     def valid_data(self):
-        in_ = np.r_[0, 2, 4] + 1j * np.r_[1, 3, 5]
-        out = np.arange(6)
+        N = 5
+        in_ = np.arange(N) + 1j * np.arange(N, 2 * N)
+        out = np.stack([np.arange(N), np.arange(N, 2 * N)], axis=-1)
         return in_, out
 
     @pytest.fixture(params=[_.value for _ in list(pxrt.Width)])
     def no_op_dtype(self, request):
         return request.param
 
+    # Tests -----------------------------------------------
+    @pytest.mark.parametrize(
+        "shape",
+        [
+            (1,),
+            (5,),
+            (5, 1, 4),
+            (5, 10, 4),
+        ],
+    )
+    def test_chunk(self, shape, width):
+        # DASK-only: verify chunk structure:
+        # * unchanged in batch dimensions;
+        # * no chunks in virtual dimension.
+        ndi = pxd.NDArrayInfo.DASK
+        xp = ndi.module()
 
-class TestViewAsMat:
+        rng = xp.random.default_rng()
+        xR = rng.standard_normal(size=shape, dtype=width.value)
+        xI = rng.standard_normal(size=shape, dtype=width.value)
+        x = (xR + 1j * xI).astype(width.complex.value)
+        x = ct.chunk_array(x, complex_view=False)
+
+        y = pxu.view_as_real(x)
+
+        assert y.shape == (*shape, 2)
+        assert y.dtype == width.value
+        assert y.chunks[:-1] == x.chunks
+        assert y.chunks[-1] == (2,)
+        assert xp.allclose(y[..., 0], x.real).compute()
+        assert xp.allclose(y[..., 1], x.imag).compute()
+
+
+class TestAsRealOp:
+    # Fixtures ----------------------------------------------------------------
     @pytest.fixture(
         params=[
-            np.reshape(np.r_[:6] + 1j * np.r_[2:8], (2, 3)),
+            # Specification of complex-valued arrays
+            #     dim_shape   [canonical form]
+            #     dim_rank    [user form]
+            #     codim_shape [canonical form]
+            # 2D operators
+            ((5,), None, (3,)),
+            ((5,), (1,), (3,)),
+            # ND operators
+            ((5,), 1, (1, 2, 3)),
+            ((5, 3), 2, (1, 2, 3)),
+            ((5, 3, 4), 3, (1, 2, 3)),
+            ((5, 3, 4), 3, (1, 2, 3, 4)),
         ]
     )
-    def input(self, request) -> np.ndarray:
-        # (M,N) NumPy input to test. Will be transformed to different backend/precisions via _input().
+    def _spec(self, request):
         return request.param
 
-    @pytest.fixture(params=pxd.supported_array_modules())
-    def xp(self, request) -> pxt.ArrayModule:
-        return request.param
+    @pytest.fixture
+    def dim_shape(self, _spec) -> pxt.NDArrayShape:
+        return _spec[0]
+
+    @pytest.fixture
+    def codim_shape(self, _spec) -> pxt.NDArrayShape:
+        return _spec[2]
+
+    @pytest.fixture
+    def complex_in(self, dim_shape, codim_shape, xp, cwidth) -> pxt.NDArray:
+        rng = np.random.default_rng()
+        A_r = rng.standard_normal((*codim_shape, *dim_shape))
+        A_i = rng.standard_normal((*codim_shape, *dim_shape))
+        A = xp.array(A_r + 1j * A_i, dtype=cwidth.value)
+        return A
+
+    @pytest.fixture
+    def real_out(self, complex_in, _spec) -> pxt.NDArray:
+        A_r = pxu.as_real_op(complex_in, dim_rank=_spec[1])
+        return A_r
 
     @pytest.fixture(params=pxrt.CWidth)
     def cwidth(self, request) -> pxrt.CWidth:
         return request.param
 
-    @pytest.fixture
-    def width(self, cwidth) -> pxrt.Width:
-        return cwidth.real
+    # Tests -------------------------------------------------------------------
+    def test_backend(self, complex_in, real_out):
+        assert type(complex_in) == type(real_out)  # noqa: E721
 
-    @pytest.fixture
-    def _input(self, input, xp, cwidth) -> pxt.NDArray:
-        in_ = xp.array(input, dtype=cwidth.value)
-        return in_
+    def test_prec(self, complex_in, real_out):
+        prec_in = pxrt.CWidth(complex_in.dtype)
+        prec_out = pxrt.Width(real_out.dtype)
+        assert prec_in.real == prec_out
 
-    @pytest.fixture(params=[True, False])
-    def real_input(self, request) -> bool:
-        return request.param
+    def test_shape(self, dim_shape, codim_shape, complex_in, real_out):
+        dim_rank = len(dim_shape)
+        codim_rank = len(codim_shape)
+        sh_codim = complex_in.shape[:codim_rank]
+        sh_dim = complex_in.shape[-dim_rank:]
+        assert real_out.shape == (*sh_codim, 2, *sh_dim, 2)
 
-    @pytest.fixture(params=[True, False])
-    def real_output(self, request) -> bool:
-        return request.param
+    @pytest.mark.parametrize("seed", list(range(10)))
+    def test_math(self, dim_shape, complex_in, real_out, seed):
+        # <A, x>_{\bC} = <A_r, x_r>_{\bR}
+        rng = np.random.default_rng(seed=seed)
 
-    def test_backend_asmat(self, _input, real_input, real_output):
-        out = pxu.view_as_real_mat(
-            _input,
-            real_input=real_input,
-            real_output=real_output,
-        )
-        assert type(out) == type(_input)  # noqa: E721
+        x = rng.standard_normal((2, *dim_shape))
+        x = x[0] + 1j * x[1]
+        x_r = pxu.view_as_real(x)
 
-    def test_prec_asmat(self, _input, real_input, real_output):
-        out = pxu.view_as_real_mat(
-            _input,
-            real_input=real_input,
-            real_output=real_output,
-        )
-        in_prec = pxrt.CWidth(_input.dtype)
-        out_prec = pxrt.Width(out.dtype).complex
-        assert in_prec == out_prec
+        dim_rank = len(dim_shape)
+        ip_R = np.tensordot(real_out, x_r, axes=dim_rank + 1)  # real-valued tensor contraction
+        ip_C = np.tensordot(complex_in, x, axes=dim_rank)  # complex-valued tensor contraction
+        ip_C_r = pxu.view_as_real(ip_C)
 
-    def test_shape_asmat(self, _input, real_input, real_output):
-        if real_input and real_output:
-            sh_gt = _input.shape
-        elif (not real_input) and real_output:
-            sh_gt = (_input.shape[0], 2 * _input.shape[1])
-        elif real_input and (not real_output):
-            sh_gt = (2 * _input.shape[0], _input.shape[1])
-        else:  # (not real_input) and (not real_output)
-            sh_gt = (2 * _input.shape[0], 2 * _input.shape[1])
+        assert np.allclose(ip_C_r, ip_R)
 
-        out = pxu.view_as_real_mat(
-            _input,
-            real_input=real_input,
-            real_output=real_output,
-        )
-        assert out.shape == sh_gt
 
-    def test_math_asmat(self, xp, cwidth, real_input, real_output):
-        # view_as_real(A @ x) = view_as_real_mat(A) @ view_as_real(x)
-        rng = np.random.default_rng(seed=3)  # random seed for reproducibility
+class TestRequireViewable:
+    @pytest.mark.parametrize("ndim", [1, 2, 3])
+    def test_dask_noop(self, ndim, width):
+        xp = pxd.NDArrayInfo.DASK.module()
+        rng = xp.random.default_rng()
 
-        M, N = 5, 3
-        A = xp.array(rng.normal(size=(M, N)) + 1j * rng.normal(size=(M, N)), dtype=cwidth.value)
-        x = xp.array(rng.normal(size=(N,)) + 1j * rng.normal(size=(N,)), dtype=cwidth.value)
-        if real_input:
-            x = x.real
+        x = rng.standard_normal(size=(10,) * ndim, dtype=width.value)
+        y = pxu.require_viewable(x)
 
-        lhs = pxu.view_as_real(A @ x)
-        if real_output:
-            lhs = lhs[::2]
+        assert x is y
 
-        Ar = pxu.view_as_real_mat(A, real_input=real_input, real_output=real_output)
-        rhs = Ar @ pxu.view_as_real(x)
-        assert np.allclose(lhs, rhs)
+    @pytest.mark.parametrize(
+        "ndi",
+        [
+            pxd.NDArrayInfo.NUMPY,
+            pxd.NDArrayInfo.CUPY,
+        ],
+    )
+    @pytest.mark.parametrize("ndim", [1, 2, 3])
+    def test_inmemory_copy(self, ndim, ndi, width):
+        if ndi.module() is None:
+            pytest.skip(f"{ndi} unsupported on this machine.")
 
-    def test_round_trip(self, _input, real_input, real_output):
-        # view_as_complex \compose view_as_real = Id
-        x = _input
-        y = pxu.view_as_real_mat(
-            x,
-            real_input=real_input,
-            real_output=real_output,
-        )
-        z = pxu.view_as_complex_mat(
-            y,
-            real_input=real_input,
-            real_output=real_output,
-        )
+        xp = ndi.module()
+        rng = xp.random.default_rng()
 
-        assert np.allclose(x.real, z.real)
-        if real_input and real_output:
-            assert np.allclose(z.imag, 0)
-        else:
-            assert np.allclose(x.imag, z.imag)
+        axes = itertools.permutations(range(ndim))
+        for order in axes:
+            x = rng.standard_normal(size=(10,) * ndim, dtype=width.value)
+            xT = x.transpose(order)
+            y = pxu.require_viewable(xT)
+
+            if order[-1] == ndim - 1:
+                # Last axis stayed at original position -> no copy required
+                assert y is xT
+            else:
+                # Last axis moved -> not contiguous -> copy required
+                assert y is not xT

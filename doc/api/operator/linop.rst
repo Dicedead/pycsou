@@ -15,7 +15,7 @@ Basic Operators
 
 .. autofunction:: pyxu.operator.Trim
 
-.. autofunction:: pyxu.operator.Sum
+.. autoclass:: pyxu.operator.Sum
 
 .. autoclass:: pyxu.operator.IdentityOp
    :no-members:
@@ -42,9 +42,16 @@ Transforms
    :members: apply, adjoint
    :special-members: __init__
 
-.. autoclass:: pyxu.operator.NUFFT
+.. autoclass:: pyxu.operator.CZT
    :no-members:
-   :members: type1, type2, type3, apply, adjoint, ascomplexarray, mesh, plot_kernel, params, auto_chunk, allocate, diagnostic_plot, stats
+   :members: apply, adjoint
+   :special-members: __init__
+
+.. autoclass:: pyxu.operator.NUFFT1
+   :no-members:
+   :members: apply, adjoint, config
+
+.. autofunction:: pyxu.operator.NUFFT2
 
 Stencils & Convolutions
 -----------------------
@@ -60,7 +67,13 @@ Stencils & Convolutions
 
 .. autoclass:: pyxu.operator.Correlate
 
-.. autofunction:: pyxu.operator.Convolve
+.. autoclass:: pyxu.operator.Convolve
+
+.. autoclass:: pyxu.operator.FFTCorrelate
+
+.. autoclass:: pyxu.operator.FFTConvolve
+
+.. autoclass:: pyxu.operator.UniformSpread
 
 Filters
 -------

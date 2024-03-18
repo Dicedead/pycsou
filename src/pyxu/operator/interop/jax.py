@@ -105,7 +105,8 @@ def _to_jax(x: pxt.NDArray, enable_warnings: bool = True) -> JaxArray:
 
 def from_jax(
     cls: pxt.OpC,
-    shape: pxt.OpShape,
+    dim_shape: pxt.NDArrayShape,
+    codim_shape: pxt.NDArrayShape,
     vectorize: pxt.VarName = frozenset(),
     jit: bool = False,
     enable_warnings: bool = True,
@@ -118,8 +119,10 @@ def from_jax(
     ----------
     cls: OpC
         Operator sub-class to instantiate.
-    shape: OpShape
-        (N, M) operator shape.
+    dim_shape: NDArrayShape
+        Operator domain shape (M1,...,MD).
+    codim_shape: NDArrayShape
+        Operator co-domain shape (N1,...,NK).
     kwargs: dict
         (k[str], v[callable]) pairs to use as arithmetic methods.
 
@@ -142,7 +145,9 @@ def from_jax(
     Returns
     -------
     op: OpT
-        (N, M) Pyxu-compliant operator.
+        Pyxu-compliant operator :math:`A: \mathbb{R}^{M_{1} \times\cdots\times M_{D}} \to \mathbb{R}^{N_{1}
+        \times\cdots\times N_{K}}`.
+
 
     Notes
     -----
@@ -150,14 +155,14 @@ def from_jax(
 
       .. code-block:: python3
 
-         def apply(arr: jax.Array) -> jax.Array
-         def grad(arr: jax.Array) -> jax.Array
-         def adjoint(arr: jax.Array) -> jax.Array
-         def prox(arr: jax.Array, tau: pxt.Real) -> jax.Array
-         def pinv(arr: jax.Array, damp: pxt.Real) -> jax.Array
+         def apply(arr: jax.Array) -> jax.Array                  # (..., M1,...,MD) -> (..., N1,...,NK)
+         def grad(arr: jax.Array) -> jax.Array                   # (..., M1,...,MD) -> (..., M1,...,MD)
+         def adjoint(arr: jax.Array) -> jax.Array                # (..., N1,...,NK) -> (..., M1,...,MD)
+         def prox(arr: jax.Array, tau: pxt.Real) -> jax.Array    # (..., M1,...,MD) -> (..., M1,...,MD)
+         def pinv(arr: jax.Array, damp: pxt.Real) -> jax.Array   # (..., N1,...,NK) -> (..., M1,...,MD)
 
-      Moreover, the methods above **must** accept ``(..., M)``-shaped inputs for ``arr``.  If this does not hold,
-      consider populating `vectorize`.
+      Moreover, the methods above **must** accept stacking dimensions in ``arr``.  If this does not hold, consider
+      populating `vectorize`.
 
     * Auto-vectorization consists in decorating `kwargs`-specified arithmetic methods with
       :py:func:`jax.numpy.vectorize`.
@@ -207,7 +212,8 @@ def from_jax(
 
        op = pxi.from_jax(
            cls=pxa.DiffMap,
-           shape=(3, 2),
+           dim_shape=2,
+           codim_shape=3,
            vectorize="apply",  # j_apply() does not work on stacked inputs
                                # --> let JAX figure it out automatically.
            apply=j_apply,
@@ -231,7 +237,8 @@ def from_jax(
 
     src = _FromJax(
         cls=cls,
-        shape=shape,
+        dim_shape=dim_shape,
+        codim_shape=codim_shape,
         vectorize=vectorize,
         jit=bool(jit),
         enable_warnings=bool(enable_warnings),
@@ -248,7 +255,8 @@ class _FromJax(px_src._FromSource):
     def __init__(  # See from_jax() for a detailed description.
         self,
         cls: pxt.OpC,
-        shape: pxt.OpShape,
+        dim_shape: pxt.NDArrayShape,
+        codim_shape: pxt.NDArrayShape,
         vectorize: frozenset[str],
         jit: bool,
         enable_warnings: bool,
@@ -256,10 +264,10 @@ class _FromJax(px_src._FromSource):
     ):
         super().__init__(
             cls=cls,
-            shape=shape,
+            dim_shape=dim_shape,
+            codim_shape=codim_shape,
             embed=dict(),  # jax-funcs are state-free.
             vectorize=vectorize,
-            vmethod=None,  # pyxu.util.vectorize() not used for jax-funcs
             enforce_precision=frozenset(),  # will be applied manually in op() ...
             **kwargs,
         )
@@ -286,14 +294,14 @@ class _FromJax(px_src._FromSource):
 
         _op = px_src.from_source(
             cls=self._op.__class__,
-            shape=self._op.shape,
+            dim_shape=self._op.dim_shape,
+            codim_shape=self._op.codim_shape,
             embed=dict(
                 _jax=j_state,
                 _enable_warnings=self._enable_warnings,
                 _jit=self._jit,
             ),
             # vectorize=None,  # see top-level comment.
-            # vmethod=None,    #
             enforce_precision=self._enforce_fp,
             **kwargs,
         )
@@ -340,7 +348,7 @@ class _FromJax(px_src._FromSource):
 
             def f_adjoint(arr: JaxArray) -> JaxArray:
                 f = self._kwargs["apply"]
-                x = jnp.zeros_like(arr, shape=(self._op.dim,))
+                x = jnp.zeros_like(arr, shape=self._op.dim_shape)
                 _, f_vjp = jax.vjp(f, x)
                 out = f_vjp(arr)[0]  # f_vjp() returns a tuple
                 return out
@@ -354,12 +362,14 @@ class _FromJax(px_src._FromSource):
         # Vectorize user-specified [or _infer_missing()-added] arithmetic methods via jax.vmap().
         #
         # Modifies `_kwargs` to hold vectorized jax-funcs.
+        d_sh = ",".join([f"m{i}" for i in range(self._op.dim_rank)])  # dim_shape
+        cd_sh = ",".join([f"n{i}" for i in range(self._op.codim_rank)])  # codim_shape
         vkwargs = dict(  # kwargs to jax.numpy.vectorize()
-            apply=dict(signature="(n)->(m)"),
-            adjoint=dict(signature="(n)->(m)"),
-            grad=dict(signature="(n)->(n)"),
-            prox=dict(signature="(n)->(n)", excluded={1}),
-            pinv=dict(signature="(n)->(m)", excluded={1}),
+            apply=dict(signature=f"({d_sh})->({cd_sh})"),
+            adjoint=dict(signature=f"({cd_sh})->({d_sh})"),
+            grad=dict(signature=f"({d_sh})->({d_sh})"),
+            prox=dict(signature=f"({d_sh})->({d_sh})", excluded={1}),
+            pinv=dict(signature=f"({cd_sh})->({d_sh})", excluded={1}),
         )
 
         for name in self._kwargs:
@@ -409,7 +419,8 @@ class _FromJax(px_src._FromSource):
     def apply(self, arr: pxt.NDArray) -> pxt.NDArray:
         j_arr = _to_jax(arr, enable_warnings=self._enable_warnings)
         func = self._jax["apply"]
-        with jax.default_device(j_arr.device()):
+        dev = j_arr.devices().pop()
+        with jax.default_device(dev):
             j_out = func(j_arr)
         out = _from_jax(j_out, xp=pxu.get_array_module(arr))
         return out
@@ -417,7 +428,8 @@ class _FromJax(px_src._FromSource):
     def grad(self, arr: pxt.NDArray) -> pxt.NDArray:
         j_arr = _to_jax(arr, enable_warnings=self._enable_warnings)
         func = self._jax["grad"]
-        with jax.default_device(j_arr.device()):
+        dev = j_arr.devices().pop()
+        with jax.default_device(dev):
             j_out = func(j_arr)
         out = _from_jax(j_out, xp=pxu.get_array_module(arr))
         return out
@@ -425,7 +437,8 @@ class _FromJax(px_src._FromSource):
     def adjoint(self, arr: pxt.NDArray) -> pxt.NDArray:
         j_arr = _to_jax(arr, enable_warnings=self._enable_warnings)
         func = self._jax["adjoint"]
-        with jax.default_device(j_arr.device()):
+        dev = j_arr.devices().pop()
+        with jax.default_device(dev):
             j_out = func(j_arr)
         out = _from_jax(j_out, xp=pxu.get_array_module(arr))
         return out
@@ -433,7 +446,8 @@ class _FromJax(px_src._FromSource):
     def prox(self, arr: pxt.NDArray, tau: pxt.Real) -> pxt.NDArray:
         j_arr = _to_jax(arr, enable_warnings=self._enable_warnings)
         func = self._jax["prox"]
-        with jax.default_device(j_arr.device()):
+        dev = j_arr.devices().pop()
+        with jax.default_device(dev):
             j_out = func(j_arr, tau)  # positional args only if auto-vectorized.
         out = _from_jax(j_out, xp=pxu.get_array_module(arr))
         return out
@@ -441,7 +455,8 @@ class _FromJax(px_src._FromSource):
     def pinv(self, arr: pxt.NDArray, damp: pxt.Real, **kwargs) -> pxt.NDArray:
         j_arr = _to_jax(arr, enable_warnings=self._enable_warnings)
         func = self._jax["pinv"]
-        with jax.default_device(j_arr.device()):
+        dev = j_arr.devices().pop()
+        with jax.default_device(dev):
             j_out = func(j_arr, damp)  # positional args only if auto-vectorized.
         out = _from_jax(j_out, xp=pxu.get_array_module(arr))
         return out
@@ -464,14 +479,15 @@ class _FromJax(px_src._FromSource):
 
             # define adjoint: [2] explains benefits of linear_transpose() over vjp().
             # [2] https://jax.readthedocs.io/en/latest/_autosummary/jax.linear_transpose.html
-            hint = types.SimpleNamespace(shape=(self.dim,), dtype=arr.dtype)
+            hint = types.SimpleNamespace(shape=self.dim_shape, dtype=arr.dtype)
             _adj = jax.linear_transpose(f_fwd, hint)
             f_adj = lambda arr: _adj(arr)[0]  # jax returns a tuple
 
-            klass = pxa.LinFunc if (self.codim == 1) else pxa.LinOp
+            klass = pxa.LinFunc if (self.codim_shape == (1,)) else pxa.LinOp
             op = from_jax(
                 cls=klass,
-                shape=self.shape,
+                dim_shape=self.dim_shape,
+                codim_shape=self.codim_shape,
                 vectorize=("apply", "adjoint"),
                 jit=self._jit,
                 enable_warnings=self._enable_warnings,
@@ -493,7 +509,8 @@ class _FromJax(px_src._FromSource):
                 return out
 
             # vectorize & JIT internal function
-            _grad = jnp.vectorize(_grad, signature="(m)->(m)")
+            d_sh = ",".join([f"m{i}" for i in range(self._op.dim_rank)])  # dim_shape
+            _grad = jnp.vectorize(_grad, signature=f"({d_sh})->({d_sh})")
             if self._jit:
                 _grad = jax.jit(_grad)
 
@@ -507,12 +524,13 @@ class _FromJax(px_src._FromSource):
             def c_apply(arr: JaxArray) -> JaxArray:
                 z = jnp.zeros_like(arr)
                 c = _grad(z)
-                out = jnp.sum(c * arr, axis=-1, keepdims=True)
+                out = jnp.sum(c * arr)[jnp.newaxis]
                 return out
 
             Q = from_jax(
                 cls=pxa.PosDefOp,
-                shape=(self.dim, self.dim),
+                dim_shape=self.dim_shape,
+                codim_shape=self.dim_shape,
                 vectorize="apply",
                 jit=self._jit,
                 enable_warnings=self._enable_warnings,
@@ -520,22 +538,18 @@ class _FromJax(px_src._FromSource):
             )
             c = from_jax(
                 cls=pxa.LinFunc,
-                shape=(1, self.dim),
+                dim_shape=self.dim_shape,
+                codim_shape=1,
                 vectorize="apply",
                 jit=self._jit,
                 enable_warnings=self._enable_warnings,
                 apply=c_apply,
             )
 
-            # We cannot know a-priori which backend the supplied jax-apply() function works with.
-            # Consequence: to compute `t`, we must try different backends until one works.
+            # `t` can be computed using any backend, so we choose NUMPY.
             f = self._jax["apply"]
-            try:  # test a CPU implementation ...
-                with jax.default_device(jax.devices("cpu")[0]):
-                    t = float(f(jnp.zeros(self.dim)))
-            except Exception:  # ... and use GPU if it doesn't work.
-                with jax.default_device(jax.devices("gpu")[0]):
-                    t = float(f(jnp.zeros(self.dim)))
+            with jax.default_device(jax.devices("cpu")[0]):
+                t = float(f(jnp.zeros(self.dim_shape)))
 
             return (Q, c, t)
         else:
@@ -543,28 +557,18 @@ class _FromJax(px_src._FromSource):
 
     def asarray(self, **kwargs) -> pxt.NDArray:
         if self.has(pxa.Property.LINEAR):
-            # (1) Lin[Op,Func].asarray() assumes the operator is precision-agnostic.
-            #     This condition does not hold for JAX arrays. (See from_jax() notes.)
-            #
-            # (2) If the operator is backend-specific (i.e. only works with CUPY), then we have no way to determine
-            #     which `xp` value use in the generic LinOp.asarray() implementation without a potential fail.
-            #
-            # Consequence:
-            # (1) May need to cast Lin[Op,Func].asarray()'s output.
-            # (2) We must try different `xp` values until one works.
+            # JAX operators don't accept DASK inputs: cannot call Lin[Op,Func].asaray() with user-specified `xp` value.
+            # -> We arbitrarily perform computations using the NUMPY backend, then cast as needed.
             N = pxd.NDArrayInfo  # shorthand
-            dtype_orig = kwargs.get("dtype", pxrt.getPrecision().value)
-            xp_orig = kwargs.get("xp", N.default().module())
+            dtype = kwargs.get("dtype", pxrt.getPrecision().value)
+            xp = kwargs.get("xp", N.default().module())
 
             klass = self.__class__
-            try:
-                A = klass.asarray(self, dtype=dtype_orig, xp=N.NUMPY.module())
-            except Exception:
-                A = klass.asarray(self, dtype=dtype_orig, xp=N.CUPY.module())
+            A = klass.asarray(self, dtype=dtype, xp=N.NUMPY.module())
 
             # Not the most efficient method, but fail-proof
-            A = xp_orig.array(pxu.to_NUMPY(A), dtype=dtype_orig)
-            return A
+            B = xp.array(A, dtype=dtype)
+            return B
         else:
             raise NotImplementedError
 

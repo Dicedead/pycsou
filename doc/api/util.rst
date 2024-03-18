@@ -19,11 +19,11 @@ pyxu.util.array_module
 pyxu.util.complex
 -----------------
 
-.. autofunction:: pyxu.util.view_as_complex_mat
+.. autofunction:: pyxu.util.as_real_op
+
+.. autofunction:: pyxu.util.require_viewable
 
 .. autofunction:: pyxu.util.view_as_complex
-
-.. autofunction:: pyxu.util.view_as_real_mat
 
 .. autofunction:: pyxu.util.view_as_real
 
@@ -33,12 +33,6 @@ pyxu.util.misc
 .. autofunction:: pyxu.util.copy_if_unsafe
 
 .. autofunction:: pyxu.util.import_module
-
-.. autofunction:: pyxu.util.infer_composition_shape
-
-.. autofunction:: pyxu.util.infer_sum_shape
-
-.. autofunction:: pyxu.util.next_fast_len
 
 .. autofunction:: pyxu.util.parse_params
 
@@ -51,10 +45,8 @@ pyxu.util.misc
 pyxu.util.operator
 ------------------
 
+.. autofunction:: pyxu.util.as_canonical_axes
+
 .. autofunction:: pyxu.util.as_canonical_shape
 
 .. autofunction:: pyxu.util.vectorize
-
-.. autofunction:: pyxu.util.operator._array_ize
-
-.. autofunction:: pyxu.util.operator._dask_zip

@@ -12,12 +12,13 @@ import pyxu.util as pxu
 
 __all__ = [
     "from_sciop",
+    "to_sciop",
 ]
 
 
 def from_sciop(cls: pxt.OpC, sp_op: spsl.LinearOperator) -> pxt.OpT:
     r"""
-    Wrap a :py:class:`~scipy.sparse.linalg.LinearOperator` as a :py:class:`~pyxu.abc.LinOp` (or sub-class thereof).
+    Wrap a :py:class:`~scipy.sparse.linalg.LinearOperator` as a 2D :py:class:`~pyxu.abc.LinOp` (or sub-class thereof).
 
     Parameters
     ----------
@@ -27,7 +28,10 @@ def from_sciop(cls: pxt.OpC, sp_op: spsl.LinearOperator) -> pxt.OpT:
     Returns
     -------
     op: OpT
-        (N, M) Pyxu-compliant linear operator.
+        Pyxu-compliant linear operator with:
+
+        * dim_shape: (M,)
+        * codim_shape: (N,)
     """
     assert cls.has(pxa.Property.LINEAR)
 
@@ -42,17 +46,17 @@ def from_sciop(cls: pxt.OpC, sp_op: spsl.LinearOperator) -> pxt.OpT:
     @pxrt.enforce_precision(i="arr")
     def op_apply(_, arr: pxt.NDArray) -> pxt.NDArray:
         sh = arr.shape[:-1]
-        arr = arr.reshape(-1, _.dim)
+        arr = arr.reshape(-1, _.dim_size)
         out = _._sp_op.matmat(arr.T).T
-        out = out.reshape(*sh, _.codim)
+        out = out.reshape(*sh, _.codim_size)
         return out
 
     @pxrt.enforce_precision(i="arr")
     def op_adjoint(_, arr: pxt.NDArray) -> pxt.NDArray:
         sh = arr.shape[:-1]
-        arr = arr.reshape(-1, _.codim)
+        arr = arr.reshape(-1, _.codim_size)
         out = _._sp_op.rmatmat(arr.T).T
-        out = out.reshape(*sh, _.dim)
+        out = out.reshape(*sh, _.dim_size)
         return out
 
     def op_asarray(_, **kwargs) -> pxt.NDArray:
@@ -79,7 +83,8 @@ def from_sciop(cls: pxt.OpC, sp_op: spsl.LinearOperator) -> pxt.OpT:
 
     op = px_src.from_source(
         cls=cls,
-        shape=sp_op.shape,
+        dim_shape=sp_op.shape[1],
+        codim_shape=sp_op.shape[0],
         apply=op_apply,
         adjoint=op_adjoint,
         asarray=op_asarray,
@@ -88,3 +93,54 @@ def from_sciop(cls: pxt.OpC, sp_op: spsl.LinearOperator) -> pxt.OpT:
     op._sp_op = sp_op
 
     return op
+
+
+def to_sciop(
+    op: pxt.OpT,
+    dtype: pxt.DType = None,
+    gpu: bool = False,
+) -> spsl.LinearOperator:
+    r"""
+    Cast a :py:class:`~pyxu.abc.LinOp` to a CPU/GPU :py:class:`~scipy.sparse.linalg.LinearOperator`, compatible with
+    the matrix-free linear algebra routines of :py:mod:`scipy.sparse.linalg`.
+
+    Parameters
+    ----------
+    dtype: DType
+        Working precision of the linear operator.
+    gpu: bool
+        Operate on CuPy inputs (True) vs. NumPy inputs (False).
+
+    Returns
+    -------
+    op: ~scipy.sparse.linalg.LinearOperator
+        Linear operator object compliant with SciPy's interface.
+    """
+    if not (op.dim_rank == op.codim_rank == 1):
+        msg = "SciPy LinOps are limited to 1D -> 1D maps."
+        raise ValueError(msg)
+
+    def matmat(arr):
+        with pxrt.EnforcePrecision(False):
+            return op.apply(arr.T).T
+
+    def rmatmat(arr):
+        with pxrt.EnforcePrecision(False):
+            return op.adjoint(arr.T).T
+
+    if dtype is None:
+        dtype = pxrt.getPrecision().value
+
+    if gpu:
+        assert pxd.CUPY_ENABLED
+        spx = pxu.import_module("cupyx.scipy.sparse.linalg")
+    else:
+        spx = spsl
+    return spx.LinearOperator(
+        shape=(op.codim_size, op.dim_size),
+        matvec=matmat,
+        rmatvec=rmatmat,
+        matmat=matmat,
+        rmatmat=rmatmat,
+        dtype=dtype,
+    )

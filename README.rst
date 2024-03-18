@@ -1,4 +1,4 @@
-.. image:: https://raw.githubusercontent.com/matthieumeo/pyxu/master/doc/_static/wide-logo.png
+.. image:: https://raw.githubusercontent.com/pyxu-org/pyxu/master/doc/_static/wide-logo.png
    :target: https://pyxu-org.github.io/
    :alt: Pyxu logo
 
@@ -11,9 +11,9 @@ Pyxu: Modular and Scalable Computational Imaging
 .. image:: https://badge.fury.io/py/pyxu.svg
    :target: https://pypi.org/project/pyxu/
    :alt: PyPI Version
-.. image:: https://img.shields.io/badge/Python-3.9%20|%203.10%20|%203.11-blue
+.. image:: https://img.shields.io/badge/Python-3.10%20|%203.11%20|%203.12-blue
    :target: https://www.python.org/downloads/
-   :alt: Python 3.9 | 3.10 | 3.11
+   :alt: Python 3.10 | 3.11 | 3.12
 .. image:: https://img.shields.io/badge/Part%20of-PyData-orange
    :target: https://pydata.org/
    :alt: Part of PyData
@@ -29,20 +29,20 @@ Pyxu: Modular and Scalable Computational Imaging
 .. image:: https://img.shields.io/badge/pre--commit-enabled-brightgreen?style=flat&logo=pre-commit&logoColor=white
    :target: https://pre-commit.com/
    :alt: pre-commit enabled
-.. image:: https://img.shields.io/github/languages/code-size/matthieumeo/pyxu
+.. image:: https://img.shields.io/github/languages/code-size/pyxu-org/pyxu
    :alt: GitHub code size in bytes
-   :target: https://github.com/matthieumeo/pyxu
-.. image:: https://img.shields.io/github/commit-activity/y/matthieumeo/pyxu
-   :target: https://github.com/matthieumeo/pyxu/commits/main
+   :target: https://github.com/pyxu-org/pyxu
+.. image:: https://img.shields.io/github/commit-activity/y/pyxu-org/pyxu
+   :target: https://github.com/pyxu-org/pyxu/commits/main
    :alt: Number of Commits
-.. image:: https://img.shields.io/github/last-commit/matthieumeo/pyxu
-   :target: https://github.com/matthieumeo/pyxu/commits
+.. image:: https://img.shields.io/github/last-commit/pyxu-org/pyxu
+   :target: https://github.com/pyxu-org/pyxu/commits
    :alt: Last Commit
-.. image:: https://img.shields.io/github/contributors/matthieumeo/pyxu
-   :target: https://github.com/matthieumeo/pyxu/graphs/contributors
+.. image:: https://img.shields.io/github/contributors/pyxu-org/pyxu
+   :target: https://github.com/pyxu-org/pyxu/graphs/contributors
    :alt: Number of Contributors
 .. image:: https://img.shields.io/badge/PRs-welcome-brightgreen.svg
-   :target: https://github.com/matthieumeo/pyxu/pulls
+   :target: https://github.com/pyxu-org/pyxu/pulls
    :alt: PRs Welcome
 .. image:: https://zenodo.org/badge/DOI/10.5281/zenodo.4486431.svg
    :target: https://doi.org/10.5281/zenodo.4486431
@@ -59,7 +59,7 @@ level to quickly prototype/deploy *hardware accelerated and out-of-core* computa
 Thanks to its **microservice architecture** and tight integration with the PyData ecosystem, Pyxu supports a wide range
 of imaging applications, scales, and computation architectures.
 
-.. image:: https://raw.githubusercontent.com/matthieumeo/pyxu/master/doc/_static/banner.jpg
+.. image:: https://raw.githubusercontent.com/pyxu-org/pyxu/master/doc/_static/banner.jpg
    :target: https://pyxu-org.github.io/examples/index.html
    :alt: Banner
 
@@ -111,7 +111,7 @@ Python enthusiasts 🐍.
 Basic Installation
 ------------------
 
-The core of **Pyxu** is lightweight and straightforward to install. You'll need Python (>= 3.9, < 3.12) and a few
+The core of **Pyxu** is lightweight and straightforward to install. You'll need Python (>= 3.10, < 3.13) and a few
 mandatory dependencies. While these dependencies will be automatically installed via ``pip``, we highly recommend
 installing NumPy and SciPy via ``conda`` to benefit from optimized math libraries.
 
@@ -294,7 +294,7 @@ Cite us
                      Sepand Kashani and
                      Joan Rué-Queralt and
                      Pyxu Developers},
-     title        = {matthieumeo/pyxu: pyxu},
+     title        = {pyxu-org/pyxu: pyxu},
      publisher    = {Zenodo},
      doi          = {10.5281/zenodo.4486431},
      url          = {https://doi.org/10.5281/zenodo.4486431}

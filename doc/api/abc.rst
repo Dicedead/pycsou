@@ -27,9 +27,6 @@ pyxu.abc.arithmetic
 .. autoclass:: pyxu.abc.arithmetic.ChainRule
    :no-members:
 
-.. autoclass:: pyxu.abc.arithmetic.PowerRule
-   :no-members:
-
 .. autoclass:: pyxu.abc.arithmetic.TransposeRule
    :no-members:
 
@@ -47,7 +44,6 @@ pyxu.abc.operator
 
 .. autoclass:: pyxu.abc.Func
    :no-members:
-   :members: asloss
 
 .. autoclass:: pyxu.abc.DiffMap
    :no-members:

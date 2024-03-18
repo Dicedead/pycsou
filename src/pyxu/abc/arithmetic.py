@@ -1,15 +1,12 @@
 # Arithmetic Rules
 
 import types
-import typing as typ
-import warnings
 
 import numpy as np
 
 import pyxu.abc.operator as pxo
 import pyxu.info.deps as pxd
 import pyxu.info.ptype as pxt
-import pyxu.info.warning as pxw
 import pyxu.runtime as pxrt
 import pyxu.util as pxu
 
@@ -83,7 +80,7 @@ class ScaleRule(Rule):
         | CAN_EVAL                 | yes         | op_new.apply(arr) = op_old.apply(arr) * \alpha                     |
         |                          |             | op_new.lipschitz = op_old.lipschitz * abs(\alpha)                  |
         |--------------------------|-------------|--------------------------------------------------------------------|
-        | FUNCTIONAL               | yes         | op_new.asloss(\beta) = op_old.asloss(\beta) * \alpha               |
+        | FUNCTIONAL               | yes         |                                                                    |
         |--------------------------|-------------|--------------------------------------------------------------------|
         | PROXIMABLE               | \alpha > 0  | op_new.prox(arr, tau) = op_old.prox(arr, tau * \alpha)             |
         |--------------------------|-------------|--------------------------------------------------------------------|
@@ -118,19 +115,25 @@ class ScaleRule(Rule):
 
     def __init__(self, op: pxt.OpT, cst: pxt.Real):
         super().__init__()
-        self._op = op.squeeze()
+        self._op = op
         self._cst = float(cst)
 
     def op(self) -> pxt.OpT:
         if np.isclose(self._cst, 0):
             from pyxu.operator import NullOp
 
-            op = NullOp(shape=self._op.shape).squeeze()
+            op = NullOp(
+                dim_shape=self._op.dim_shape,
+                codim_shape=self._op.codim_shape,
+            )
         elif np.isclose(self._cst, 1):
             op = self._op
         else:
             klass = self._infer_op_klass()
-            op = klass(shape=self._op.shape)
+            op = klass(
+                dim_shape=self._op.dim_shape,
+                codim_shape=self._op.codim_shape,
+            )
             op._op = self._op  # embed for introspection
             op._cst = self._cst  # embed for introspection
             for p in op.properties():
@@ -253,16 +256,6 @@ class ScaleRule(Rule):
         tr = self._op.trace(**kwargs) * self._cst
         return tr
 
-    def asloss(self, data: pxt.NDArray = None) -> pxt.OpT:
-        if self.has(pxo.Property.FUNCTIONAL):
-            if data is None:
-                op = self
-            else:
-                op = self._op.asloss(data) * self._cst
-            return op
-        else:
-            raise NotImplementedError
-
 
 class ArgScaleRule(Rule):
     r"""
@@ -281,7 +274,7 @@ class ArgScaleRule(Rule):
         | CAN_EVAL                 | yes         | op_new.apply(arr) = op_old.apply(arr * \alpha)                              |
         |                          |             | op_new.lipschitz = op_old.lipschitz * abs(\alpha)                           |
         |--------------------------|-------------|-----------------------------------------------------------------------------|
-        | FUNCTIONAL               | yes         | op_new.asloss(\beta) = AMBIGUOUS -> DISABLED                                |
+        | FUNCTIONAL               | yes         |                                                                             |
         |--------------------------|-------------|-----------------------------------------------------------------------------|
         | PROXIMABLE               | yes         | op_new.prox(arr, tau) = op_old.prox(\alpha * arr, \alpha**2 * tau) / \alpha |
         |--------------------------|-------------|-----------------------------------------------------------------------------|
@@ -316,7 +309,7 @@ class ArgScaleRule(Rule):
 
     def __init__(self, op: pxt.OpT, cst: pxt.Real):
         super().__init__()
-        self._op = op.squeeze()
+        self._op = op
         self._cst = float(cst)
 
     def op(self) -> pxt.OpT:
@@ -327,23 +320,25 @@ class ArgScaleRule(Rule):
             @pxrt.enforce_precision(i="arr")
             def op_apply(_, arr: pxt.NDArray) -> pxt.NDArray:
                 xp = pxu.get_array_module(arr)
-                arr = xp.zeros(
-                    (*arr.shape[:-1], self._op.dim),
-                    dtype=arr.dtype,
-                )
+                arr = xp.zeros_like(arr)
                 out = self._op.apply(arr)
                 return out
 
             op = ConstantValued(
-                shape=self._op.shape,
+                dim_shape=self._op.dim_shape,
+                codim_shape=self._op.codim_shape,
                 cst=self._cst,
             )
             op.apply = types.MethodType(op_apply, op)
+            op._name = "ConstantVector"
         elif np.isclose(self._cst, 1):
             op = self._op
         else:
             klass = self._infer_op_klass()
-            op = klass(shape=self._op.shape)
+            op = klass(
+                dim_shape=self._op.dim_shape,
+                codim_shape=self._op.codim_shape,
+            )
             op._op = self._op  # embed for introspection
             op._cst = self._cst  # embed for introspection
             for p in op.properties():
@@ -398,7 +393,8 @@ class ArgScaleRule(Rule):
     def prox(self, arr: pxt.NDArray, tau: pxt.Real) -> pxt.NDArray:
         x = arr.copy()
         x *= self._cst
-        out = self._op.prox(x, (self._cst**2) * tau)
+        y = self._op.prox(x, (self._cst**2) * tau)
+        out = pxu.copy_if_unsafe(y)
         out /= self._cst
         return out
 
@@ -431,7 +427,7 @@ class ArgScaleRule(Rule):
     def grad(self, arr: pxt.NDArray) -> pxt.NDArray:
         x = arr.copy()
         x *= self._cst
-        out = self._op.grad(x)
+        out = pxu.copy_if_unsafe(self._op.grad(x))
         out *= self._cst
         return out
 
@@ -471,18 +467,6 @@ class ArgScaleRule(Rule):
         tr = self._op.trace(**kwargs) * self._cst
         return tr
 
-    def asloss(self, data: pxt.NDArray = None) -> pxt.OpT:
-        if self.has(pxo.Property.FUNCTIONAL):
-            msg = "\n".join(
-                [
-                    "The meaning of op.argscale().asloss() is ambiguous.",
-                    "Rewrite the expression differently to clarify the intent.",
-                ]
-            )
-            raise ArithmeticError(msg)
-        else:
-            raise NotImplementedError
-
 
 class ArgShiftRule(Rule):
     r"""
@@ -490,7 +474,9 @@ class ArgShiftRule(Rule):
 
     Special Cases::
 
-        \shift = 0  => self
+        [NUMPY,CUPY] \shift = 0  => self
+        [DASK]       \shift = 0  => rules below apply ...
+                                    ... because we don't force evaluation of \shift for performance reasons.
 
     Else::
 
@@ -500,7 +486,7 @@ class ArgShiftRule(Rule):
         | CAN_EVAL                 | yes        | op_new.apply(arr) = op_old.apply(arr + \shift)                  |
         |                          |            | op_new.lipschitz = op_old.lipschitz                             |
         |--------------------------|------------|-----------------------------------------------------------------|
-        | FUNCTIONAL               | yes        | op_new.asloss(\beta) = AMBIGUOUS -> DISABLED                    |
+        | FUNCTIONAL               | yes        |                                                                 |
         |--------------------------|------------|-----------------------------------------------------------------|
         | PROXIMABLE               | yes        | op_new.prox(arr, tau) = op_old.prox(arr + \shift, tau) - \shift |
         |--------------------------|------------|-----------------------------------------------------------------|
@@ -528,26 +514,37 @@ class ArgShiftRule(Rule):
         |--------------------------|------------|-----------------------------------------------------------------|
     """
 
-    def __init__(self, op: pxt.OpT, cst: typ.Union[pxt.Real, pxt.NDArray]):
+    def __init__(self, op: pxt.OpT, cst: pxt.NDArray):
         super().__init__()
-        self._op = op.squeeze()
-        self._scalar = isinstance(cst, pxt.Real)
-        if self._scalar:
-            cst = float(cst)
-        else:  # pxt.NDArray
-            assert cst.size == len(cst), f"cst: expected 1D array, got {cst.shape}."
+        self._op = op
+
+        xp = pxu.get_array_module(cst)
+        try:
+            xp.broadcast_to(cst, op.dim_shape)
+        except ValueError:
+            error_msg = "`cst` must be broadcastable with operator dimensions: "
+            error_msg += f"expected broadcastable-to {op.dim_shape}, got {cst.shape}."
+            raise ValueError(error_msg)
         self._cst = cst
 
     def op(self) -> pxt.OpT:
-        kwargs = dict(fallback=np if self._scalar else None)
-        xp = pxu.get_array_module(self._cst, **kwargs)
-        norm = pxu.compute(xp.linalg.norm(self._cst))
-        if np.isclose(float(norm), 0):
+        N = pxd.NDArrayInfo  # short-hand
+        ndi = N.from_obj(self._cst)
+        if ndi == N.DASK:
+            no_op = False
+        else:  # NUMPY/CUPY
+            xp = ndi.module()
+            norm = xp.sum(self._cst) ** 2
+            no_op = xp.allclose(norm, 0)
+
+        if no_op:
             op = self._op
         else:
             klass = self._infer_op_klass()
-            shape = self._infer_op_shape()
-            op = klass(shape=shape)
+            op = klass(
+                dim_shape=self._op.dim_shape,
+                codim_shape=self._op.codim_shape,
+            )
             op._op = self._op  # embed for introspection
             op._cst = self._cst  # embed for introspection
             for p in op.properties():
@@ -558,8 +555,7 @@ class ArgShiftRule(Rule):
         return op
 
     def _expr(self) -> tuple:
-        sh = (None,) if isinstance(self._cst, pxt.Real) else self._cst.shape
-        return ("argshift", self._op, sh)
+        return ("argshift", self._op, self._cst.shape)
 
     def _infer_op_klass(self) -> pxt.OpC:
         preserved = {
@@ -574,17 +570,6 @@ class ArgShiftRule(Rule):
         properties = self._op.properties() & preserved
         klass = pxo.Operator._infer_operator_type(properties)
         return klass
-
-    def _infer_op_shape(self) -> pxt.OpShape:
-        if self._scalar:
-            return self._op.shape
-        else:  # pxt.NDArray
-            dim_op = self._op.dim
-            dim_cst = self._cst.size
-            if (dim_op is None) or (dim_op == dim_cst):
-                return (self._op.codim, dim_cst)
-            else:
-                raise ValueError(f"Shifting {self._op} by {self._cst.shape} forbidden.")
 
     @pxrt.enforce_precision(i="arr")
     def apply(self, arr: pxt.NDArray) -> pxt.NDArray:
@@ -611,32 +596,19 @@ class ArgShiftRule(Rule):
 
     def _quad_spec(self):
         Q1, c1, t1 = self._op._quad_spec()
+
+        xp = pxu.get_array_module(self._cst)
+        cst = xp.broadcast_to(self._cst, self._op.dim_shape)
+
         Q2 = Q1
-
-        if isinstance(self._cst, pxt.Real):
-            from pyxu.operator import Sum
-
-            # backend-agnostic `c2`-term
-            c2 = c1 + (self._cst * (Sum(arg_shape=(Q1.dim,)) * Q1))
-
-            # Try all backends until one lets you compute `t2`.
-            # (Reason: We cannot infer the backend of an operator from its public API.)
-            t2 = np.nan
-            for xp in pxd.supported_array_modules():
-                if np.isnan(t2):
-                    try:
-                        cst = xp.broadcast_to(self._cst, Q1.dim)
-                        t2 = float(self._op.apply(cst))
-                    except Exception:
-                        pass
-        else:
-            c2 = c1 + pxo.LinFunc.from_array(
-                Q1.apply(self._cst),
-                enable_warnings=False,
-                # [enable_warnings] API users have no reason to call _quad_spec().
-                # If they choose to use `c2`, then we assume they know what they are doing.
-            )
-            t2 = float(self._op.apply(self._cst))
+        c2 = c1 + pxo.LinFunc.from_array(
+            A=Q1.apply(cst)[np.newaxis, ...],
+            dim_rank=self._op.dim_rank,
+            enable_warnings=False,
+            # [enable_warnings] API users have no reason to call _quad_spec().
+            # If they choose to use `c2`, then we assume they know what they are doing.
+        )
+        t2 = float(self._op.apply(cst)[0])
 
         return (Q2, c2, t2)
 
@@ -661,25 +633,12 @@ class ArgShiftRule(Rule):
         out = self._op.grad(x)
         return out
 
-    def asloss(self, data: pxt.NDArray = None) -> pxt.OpT:
-        if self.has(pxo.Property.FUNCTIONAL):
-            msg = "\n".join(
-                [
-                    "The meaning of op.argshift().asloss() is ambiguous.",
-                    "Rewrite the expression differently to clarify the intent.",
-                ]
-            )
-            raise ArithmeticError(msg)
-        else:
-            raise NotImplementedError
-
 
 class AddRule(Rule):
     r"""
     Arithmetic rules for operator addition: :math:`C(x) = A(x) + B(x)`.
 
-    The output type of ``AddRule(A.squeeze(), B.squeeze())`` is summarized in the table below (LHS/RHS
-    commute)::
+    The output type of ``AddRule(A, B)`` is summarized in the table below (LHS/RHS commute)::
 
         |---------------|-----|------|---------|----------|----------|--------------|-----------|---------|--------------|------------|------------|------------|---------------|---------------|------------|---------------|
         |   LHS / RHS   | Map | Func | DiffMap | DiffFunc | ProxFunc | ProxDiffFunc | Quadratic |  LinOp  |   LinFunc    |  SquareOp  |  NormalOp  |   UnitOp   | SelfAdjointOp |    PosDefOp   |   ProjOp   |   OrthProjOp  |
@@ -709,10 +668,6 @@ class AddRule(Rule):
             op.lipschitz = _lhs.lipschitz + _rhs.lipschitz
             IMPORTANT: if range-broadcasting takes place (ex: LHS(1,) + RHS(M,)), then the broadcasted
                        operand's Lipschitz constant must be magnified by \sqrt{M}.
-
-        * FUNCTIONAL
-            op.asloss(\beta) = _lhs.asloss(\beta) + _rhs.asloss(\beta)
-                               may be ambiguous -> warning
 
         * PROXIMABLE
             op.prox(arr, tau) = _lhs.prox(arr - tau * _rhs.grad(arr), tau)
@@ -750,13 +705,41 @@ class AddRule(Rule):
     """
 
     def __init__(self, lhs: pxt.OpT, rhs: pxt.OpT):
+        assert lhs.dim_shape == rhs.dim_shape, "Operator dimensions are not compatible."
+        try:
+            codim_bcast = np.broadcast_shapes(lhs.codim_shape, rhs.codim_shape)
+        except ValueError:
+            error_msg = "`lhs/rhs` codims must be broadcastable: "
+            error_msg += f"got {lhs.codim_shape}, {rhs.codim_shape}."
+            raise ValueError(error_msg)
+
+        if codim_bcast != lhs.codim_shape:
+            from pyxu.operator import BroadcastAxes
+
+            bcast = BroadcastAxes(
+                dim_shape=lhs.codim_shape,
+                codim_shape=codim_bcast,
+            )
+            lhs = bcast * lhs
+        if codim_bcast != rhs.codim_shape:
+            from pyxu.operator import BroadcastAxes
+
+            bcast = BroadcastAxes(
+                dim_shape=rhs.codim_shape,
+                codim_shape=codim_bcast,
+            )
+            rhs = bcast * rhs
+
         super().__init__()
-        self._lhs = lhs.squeeze()
-        self._rhs = rhs.squeeze()
+        self._lhs = lhs
+        self._rhs = rhs
 
     def op(self) -> pxt.OpT:
-        sh_op = pxu.infer_sum_shape(self._lhs.shape, self._rhs.shape)
-        klass = self._infer_op_klass()
+        # LHS/RHS have same dim/codim following __init__()
+        dim_shape = self._rhs.dim_shape
+        codim_shape = self._rhs.codim_shape
+        klass = self._infer_op_klass(dim_shape, codim_shape)
+
         if klass.has(pxo.Property.QUADRATIC):
             # Quadratic additive arithmetic differs substantially from other arithmetic operations.
             # To avoid tedious redefinitions of arithmetic methods to handle QuadraticFunc
@@ -769,7 +752,8 @@ class AddRule(Rule):
                 lQ, lc, lt = self._lhs._quad_spec()
                 rQ, rc, rt = self._rhs._quad_spec()
                 op = klass(
-                    shape=sh_op,
+                    dim_shape=dim_shape,
+                    codim_shape=1,
                     Q=lQ + rQ,
                     c=lc + rc,
                     t=lt + rt,
@@ -777,7 +761,8 @@ class AddRule(Rule):
             elif quad(self._lhs) and lin(self._rhs):
                 lQ, lc, lt = self._lhs._quad_spec()
                 op = klass(
-                    shape=sh_op,
+                    dim_shape=dim_shape,
+                    codim_shape=1,
                     Q=lQ,
                     c=lc + self._rhs,
                     t=lt,
@@ -785,7 +770,8 @@ class AddRule(Rule):
             elif lin(self._lhs) and quad(self._rhs):
                 rQ, rc, rt = self._rhs._quad_spec()
                 op = klass(
-                    shape=sh_op,
+                    dim_shape=dim_shape,
+                    codim_shape=1,
                     Q=rQ,
                     c=self._lhs + rc,
                     t=rt,
@@ -793,7 +779,10 @@ class AddRule(Rule):
             else:
                 raise ValueError("Impossible scenario: something went wrong during klass inference.")
         else:
-            op = klass(shape=sh_op)
+            op = klass(
+                dim_shape=dim_shape,
+                codim_shape=codim_shape,
+            )
             op._lhs = self._lhs  # embed for introspection
             op._rhs = self._rhs  # embed for introspection
             for p in op.properties():
@@ -806,7 +795,11 @@ class AddRule(Rule):
     def _expr(self) -> tuple:
         return ("add", self._lhs, self._rhs)
 
-    def _infer_op_klass(self) -> pxt.OpC:
+    def _infer_op_klass(
+        self,
+        dim_shape: pxt.NDArrayShape,
+        codim_shape: pxt.NDArrayShape,
+    ) -> pxt.OpC:
         P = pxo.Property
         lhs_p = self._lhs.properties()
         rhs_p = self._rhs.properties()
@@ -832,8 +825,9 @@ class AddRule(Rule):
 
         # linfunc + (square-shape) => square
         if P.LINEAR in base:
-            sh = pxu.infer_sum_shape(self._lhs.shape, self._rhs.shape)
-            if (sh[0] == sh[1]) and (sh[0] > 1):
+            dim_size = np.prod(dim_shape)
+            codim_size = np.prod(codim_shape)
+            if (dim_size == codim_size) and (codim_shape != (1,)):
                 base.add(P.LINEAR_SQUARE)
 
         # quadratic + quadratic => quadratic
@@ -853,10 +847,8 @@ class AddRule(Rule):
 
     @pxrt.enforce_precision(i="arr")
     def apply(self, arr: pxt.NDArray) -> pxt.NDArray:
-        # ranges may broadcast, so can't do in-place updates.
-        out_lhs = self._lhs.apply(arr)
-        out_rhs = self._rhs.apply(arr)
-        out = out_lhs + out_rhs
+        out = pxu.copy_if_unsafe(self._lhs.apply(arr))
+        out += self._rhs.apply(arr)
         return out
 
     def estimate_lipschitz(self, **kwargs) -> pxt.Real:
@@ -870,14 +862,6 @@ class AddRule(Rule):
         else:
             L_lhs = self._lhs.estimate_lipschitz(**kwargs)
             L_rhs = self._rhs.estimate_lipschitz(**kwargs)
-
-        # Account for broadcasting
-        if self._lhs.codim < self._rhs.codim:
-            # LHS broadcasts
-            L_lhs = L_lhs * np.sqrt(self._rhs.codim)
-        elif self._lhs.codim > self._rhs.codim:
-            # RHS broadcasts
-            L_rhs = L_rhs * np.sqrt(self._lhs.codim)
 
         L = L_lhs + L_rhs
         return L
@@ -921,14 +905,6 @@ class AddRule(Rule):
             dL_lhs = self._lhs.estimate_diff_lipschitz(**kwargs)
             dL_rhs = self._rhs.estimate_diff_lipschitz(**kwargs)
 
-        # Account for broadcasting
-        if self._lhs.codim < self._rhs.codim:
-            # LHS broadcasts
-            dL_lhs = dL_lhs * np.sqrt(self._rhs.codim)
-        elif self._lhs.codim > self._rhs.codim:
-            # RHS broadcasts
-            dL_rhs = dL_rhs * np.sqrt(self._lhs.codim)
-
         dL = dL_lhs + dL_rhs
         return dL
 
@@ -941,113 +917,46 @@ class AddRule(Rule):
 
     @pxrt.enforce_precision(i="arr")
     def adjoint(self, arr: pxt.NDArray) -> pxt.NDArray:
-        arr_lhs = arr_rhs = arr
-        if self._lhs.codim < self._rhs.codim:
-            # LHS broadcasts
-            arr_lhs = arr.sum(axis=-1, keepdims=True)
-        elif self._lhs.codim > self._rhs.codim:
-            # RHS broadcasts
-            arr_rhs = arr.sum(axis=-1, keepdims=True)
-
-        out = self._lhs.adjoint(arr_lhs)
+        out = self._lhs.adjoint(arr)
         out = pxu.copy_if_unsafe(out)
-        out += self._rhs.adjoint(arr_rhs)
+        out += self._rhs.adjoint(arr)
         return out
 
     def asarray(self, **kwargs) -> pxt.NDArray:
-        # broadcast may be involved, so can't do in-place updates.
-        A_lhs = self._lhs.asarray(**kwargs)
-        A_rhs = self._rhs.asarray(**kwargs)
-        A = A_lhs + A_rhs
+        A = self._lhs.asarray(**kwargs)
+        A = pxu.copy_if_unsafe(A)
+        A += self._rhs.asarray(**kwargs)
         return A
 
     def gram(self) -> pxt.OpT:
-        lhs, rhs = self._lhs, self._rhs
-        if self._lhs.codim == self._rhs.codim:
-            # No broadcasting
-            lhs_F = rhs_F = False
-        else:
-            # Broadcasting
-            lhs_F = self._lhs.has(pxo.Property.FUNCTIONAL)
-            rhs_F = self._rhs.has(pxo.Property.FUNCTIONAL)
-            if lhs_F:
-                lhs = _Sum(M=self._rhs.codim, N=1) * self._lhs
-            if rhs_F:
-                rhs = _Sum(M=self._lhs.codim, N=1) * self._rhs
-
-        op1 = self._lhs.gram() * (self._rhs.codim if lhs_F else 1)
-        op2 = self._rhs.gram() * (self._lhs.codim if rhs_F else 1)
-        op3 = lhs.T * rhs
-        op4 = rhs.T * lhs
+        op1 = self._lhs.gram()
+        op2 = self._rhs.gram()
+        op3 = self._lhs.T * self._rhs
+        op4 = self._rhs.T * self._lhs
         op = op1 + op2 + (op3 + op4).asop(pxo.SelfAdjointOp)
-        return op.squeeze()
+        return op
 
     def cogram(self) -> pxt.OpT:
-        lhs, rhs = self._lhs, self._rhs
-        if self._lhs.codim == self._rhs.codim:
-            # No broadcasting
-            lhs_F = rhs_F = False
-        else:
-            # Broadcasting
-            lhs_F = self._lhs.has(pxo.Property.FUNCTIONAL)
-            rhs_F = self._rhs.has(pxo.Property.FUNCTIONAL)
-            if lhs_F:
-                lhs = _Sum(M=self._rhs.codim, N=1) * self._lhs
-            if rhs_F:
-                rhs = _Sum(M=self._lhs.codim, N=1) * self._rhs
-
-        if lhs_F:
-            scale = float(self._lhs.cogram().asarray())
-            op1 = _Sum(M=self._rhs.codim, N=self._rhs.codim) * scale
-        else:
-            op1 = self._lhs.cogram()
-        if rhs_F:
-            scale = float(self._rhs.cogram().asarray())
-            op2 = _Sum(M=self._lhs.codim, N=self._lhs.codim) * scale
-        else:
-            op2 = self._rhs.cogram()
-        op3 = lhs * rhs.T
-        op4 = rhs * lhs.T
+        op1 = self._lhs.cogram()
+        op2 = self._rhs.cogram()
+        op3 = self._lhs * self._rhs.T
+        op4 = self._rhs * self._lhs.T
         op = op1 + op2 + (op3 + op4).asop(pxo.SelfAdjointOp)
-        return op.squeeze()
+        return op
 
     @pxrt.enforce_precision()
     def trace(self, **kwargs) -> pxt.Real:
         tr = 0
         for side in (self._lhs, self._rhs):
-            if side.has(pxo.Property.FUNCTIONAL):
-                tr += float(side.asarray().sum())
-            else:
-                tr += float(side.trace(**kwargs))
-        return tr
-
-    def asloss(self, data: pxt.NDArray = None) -> pxt.OpT:
-        if self.has(pxo.Property.FUNCTIONAL):
-            msg = "\n".join(
-                [
-                    "The meaning of (lhs + rhs).asloss() may be ambiguous if the loss-notion differs among functionals involved.",
-                    "It is recommended to call asloss() prior to adding functionals instead:",
-                    "    lhs.asloss(data) + rhs.asloss(data)",
-                ]
-            )
-            warnings.warn(msg, pxw.AutoInferenceWarning)
-
-            if data is None:
-                op = self
-            else:
-                op_lhs = self._lhs.asloss(data=data)
-                op_rhs = self._rhs.asloss(data=data)
-                op = op_lhs + op_rhs
-            return op
-        else:
-            raise NotImplementedError
+            tr += side.trace(**kwargs)
+        return float(tr)
 
 
 class ChainRule(Rule):
     r"""
     Arithmetic rules for operator composition: :math:`C(x) = (A \circ B)(x)`.
 
-    The output type of ``ChainRule(A.squeeze(), B.squeeze())`` is summarized in the table below::
+    The output type of ``ChainRule(A, B)`` is summarized in the table below::
 
         |---------------|------|------------|----------|------------|------------|----------------|----------------------|------------------|------------|-----------|-----------|--------------|---------------|-----------|-----------|------------|
         |   LHS / RHS   | Map  |    Func    | DiffMap  |  DiffFunc  |  ProxFunc  |  ProxDiffFunc  |      Quadratic       |      LinOp       |  LinFunc   |  SquareOp |  NormalOp |    UnitOp    | SelfAdjointOp |  PosDefOp |   ProjOp  | OrthProjOp |
@@ -1076,9 +985,6 @@ class ChainRule(Rule):
             op.apply(arr) = _lhs.apply(_rhs.apply(arr))
             op.lipschitz = _lhs.lipschitz * _rhs.lipschitz
 
-        * FUNCTIONAL
-            op.asloss(\beta) = ambiguous -> disabled
-
         * PROXIMABLE (RHS Unitary only)
             op.prox(arr, tau) = _rhs.adjoint(_lhs.prox(_rhs.apply(arr), tau))
 
@@ -1106,14 +1012,18 @@ class ChainRule(Rule):
     """
 
     def __init__(self, lhs: pxt.OpT, rhs: pxt.OpT):
+        assert lhs.dim_shape == rhs.codim_shape, "Operator dimensions are not compatible."
+
         super().__init__()
-        self._lhs = lhs.squeeze()
-        self._rhs = rhs.squeeze()
+        self._lhs = lhs
+        self._rhs = rhs
 
     def op(self) -> pxt.OpT:
-        sh_op = pxu.infer_composition_shape(self._lhs.shape, self._rhs.shape)
         klass = self._infer_op_klass()
-        op = klass(shape=sh_op)
+        op = klass(
+            dim_shape=self._rhs.dim_shape,
+            codim_shape=self._lhs.codim_shape,
+        )
         op._lhs = self._lhs  # embed for introspection
         op._rhs = self._rhs  # embed for introspection
         for p in op.properties():
@@ -1184,9 +1094,10 @@ class ChainRule(Rule):
             properties.add(P.QUADRATIC)
         if P.LINEAR in (lhs_p & rhs_p):
             properties.add(P.LINEAR)
-            if self._lhs.codim == 1:
-                properties.add(P.PROXIMABLE)
-            if self._lhs.codim == self._rhs.dim > 1:
+            if self._lhs.codim_shape == (1,):
+                for p in pxo.LinFunc.properties():
+                    properties.add(p)
+            if (self._lhs.codim_size == self._rhs.dim_size) and (self._rhs.dim_size > 1):
                 properties.add(P.LINEAR_SQUARE)
         if P.LINEAR_UNITARY in (lhs_p & rhs_p):
             properties.add(P.LINEAR_NORMAL)
@@ -1232,7 +1143,14 @@ class ChainRule(Rule):
             elif self._lhs.has(pxo.Property.QUADRATIC) and self._rhs.has(pxo.Property.LINEAR):
                 # quadratic \comp linop => quadratic
                 Q, c, t = self._quad_spec()
-                out = pxo.QuadraticFunc(shape=self.shape, Q=Q, c=c, t=t).prox(arr, tau)
+                op = pxo.QuadraticFunc(
+                    dim_shape=self.dim_shape,
+                    codim_shape=self.codim_shape,
+                    Q=Q,
+                    c=c,
+                    t=t,
+                )
+                out = op.prox(arr, tau)
             elif self._lhs.has(pxo.Property.LINEAR) and self._rhs.has(pxo.Property.PROXIMABLE):
                 # linfunc() \comp prox[diff]func() => prox[diff]func()
                 #                                  = (\alpha * prox[diff]func())
@@ -1275,7 +1193,13 @@ class ChainRule(Rule):
         no_eval = "__rule" in kwargs
         if self.has(pxo.Property.QUADRATIC):
             Q, c, t = self._quad_spec()
-            op = pxo.QuadraticFunc(shape=self.shape, Q=Q, c=c, t=t)
+            op = pxo.QuadraticFunc(
+                dim_shape=self.dim_shape,
+                codim_shape=self.codim_shape,
+                Q=Q,
+                c=c,
+                t=t,
+            )
             if no_eval:
                 dL = op.diff_lipschitz
             else:
@@ -1304,27 +1228,38 @@ class ChainRule(Rule):
 
     @pxrt.enforce_precision(i="arr")
     def grad(self, arr: pxt.NDArray) -> pxt.NDArray:
-        x = self._lhs.grad(self._rhs.apply(arr))
-        if (arr.ndim == 1) or self._rhs.has(pxo.Property.LINEAR):
+        sh = arr.shape[: -self.dim_rank]
+        if (len(sh) == 0) or self._rhs.has(pxo.Property.LINEAR):
+            x = self._lhs.grad(self._rhs.apply(arr))
             out = self._rhs.jacobian(arr).adjoint(x)
+
+            # RHS.adjoint() may change core-chunks if (codim->dim) changes are involved.
+            # This is problematic since grad() should preserve core-chunks by default.
+            ndi = pxd.NDArrayInfo.from_obj(arr)
+            if ndi == pxd.NDArrayInfo.DASK:
+                if out.chunks != arr.chunks:
+                    out = out.rechunk(arr.chunks)
         else:
-            xp = pxu.get_array_module(arr)
-            out = xp.stack(
-                [
-                    self._rhs.jacobian(a).adjoint(b)
-                    for (a, b) in zip(
-                        arr.reshape((np.prod(arr.shape[:-1]), -1)),
-                        x.reshape((np.prod(x.shape[:-1]), -1)),
-                        # zip() above safer than
-                        #       zip(
-                        #         arr.reshape((-1, self._rhs.dim)),
-                        #         x.reshape((-1, self._lhs.dim)),
-                        #       )
-                        # Due to potential _lhs/_rhs domain-agnosticity, i.e. `[lhs|rhs].dim=None`.
-                    )
-                ],
-                axis=0,
-            ).reshape(arr.shape)
+            # We need to evaluate the Jacobian seperately per stacked input.
+
+            @pxu.vectorize(
+                i="arr",
+                dim_shape=self.dim_shape,
+                codim_shape=self.dim_shape,
+            )
+            def f(arr: pxt.NDArray) -> pxt.NDArray:
+                x = self._lhs.grad(self._rhs.apply(arr))
+                out = self._rhs.jacobian(arr).adjoint(x)
+
+                # RHS.adjoint() may change core-chunks if (codim->dim) changes are involved.
+                # This is problematic since grad() should preserve core-chunks by default.
+                ndi = pxd.NDArrayInfo.from_obj(arr)
+                if ndi == pxd.NDArrayInfo.DASK:
+                    if out.chunks != arr.chunks:
+                        out = out.rechunk(arr.chunks)
+                return out
+
+            out = f(arr)
         return out
 
     @pxrt.enforce_precision(i="arr")
@@ -1336,72 +1271,18 @@ class ChainRule(Rule):
     def asarray(self, **kwargs) -> pxt.NDArray:
         A_lhs = self._lhs.asarray(**kwargs)
         A_rhs = self._rhs.asarray(**kwargs)
-        A = A_lhs @ A_rhs
+
+        xp = pxu.get_array_module(A_lhs)
+        A = xp.tensordot(A_lhs, A_rhs, axes=self._lhs.dim_rank)
         return A
 
     def gram(self) -> pxt.OpT:
         op = self._rhs.T * self._lhs.gram() * self._rhs
-        return op.asop(pxo.SelfAdjointOp).squeeze()
+        return op.asop(pxo.SelfAdjointOp)
 
     def cogram(self) -> pxt.OpT:
         op = self._lhs * self._rhs.cogram() * self._lhs.T
-        return op.asop(pxo.SelfAdjointOp).squeeze()
-
-    def asloss(self, data: pxt.NDArray = None) -> pxt.OpT:
-        if self.has(pxo.Property.FUNCTIONAL):
-            msg = "\n".join(
-                [
-                    "The meaning of (lhs * rhs).asloss() is ambiguous:",
-                    "    (1) (lhs * rhs).asloss(data) ?= lhs.asloss(data) * rhs",
-                    "    (2) (lhs * rhs).asloss(data) ?= lhs * g.[unknown_transform](data)",
-                    "Rewrite the expression differently to clarify the intent.",
-                ]
-            )
-            raise ArithmeticError(msg)
-        else:
-            raise NotImplementedError
-
-
-class PowerRule(Rule):
-    r"""
-    Arithmetic rules for operator exponentiation: :math:`B(x) = A^{k}(x)`.
-
-    Special Cases::
-
-        k = 0  => IdentityOp
-
-    Else::
-
-        B = A \circ ... \circ A  (k-1 compositions)
-    """
-
-    def __init__(self, op: pxt.OpT, k: pxt.Integer):
-        super().__init__()
-        assert op.codim == op.dim, f"PowerRule: expected endomorphism, got {op}."
-        assert int(k) >= 0, "PowerRule: only non-negative exponents are supported."
-        self._op = op.squeeze()
-        self._k = int(k)
-
-    def op(self) -> pxt.OpT:
-        if self._k == 0:
-            from pyxu.operator import IdentityOp
-
-            op = IdentityOp(dim=self._op.codim)
-        else:
-            op = self._op
-            if pxo.Property.LINEAR_IDEMPOTENT not in self._op.properties():
-                for _ in range(self._k - 1):
-                    op = ChainRule(self._op, op).op()
-
-                # Needed due to implicit PowerRule definition in terms of ChainRule.
-                op._expr = self._expr
-            else:
-                # To stop .expr() from recursing indefinitely.
-                op._expr = self._op._expr
-        return op
-
-    def _expr(self) -> tuple:
-        return ("exp", self._op, self._k)
+        return op.asop(pxo.SelfAdjointOp)
 
 
 class TransposeRule(Rule):
@@ -1417,9 +1298,6 @@ class TransposeRule(Rule):
             opT.apply(arr) = op.adjoint(arr)
             opT.lipschitz = op.lipschitz
 
-        * FUNCTIONAL
-            opT.asloss(\beta) = UNDEFINED
-
         * PROXIMABLE
             opT.prox(arr, tau) = LinFunc.prox(arr, tau)
 
@@ -1432,7 +1310,7 @@ class TransposeRule(Rule):
 
         * LINEAR
             opT.adjoint(arr) = op.apply(arr)
-            opT.asarray() = op.asarray().T
+            opT.asarray() = op.asarray().T [block-reorder dim/codim]
             opT.gram() = op.cogram()
             opT.cogram() = op.gram()
             opT.svdvals() = op.svdvals()
@@ -1447,7 +1325,10 @@ class TransposeRule(Rule):
 
     def op(self) -> pxt.OpT:
         klass = self._infer_op_klass()
-        op = klass(shape=(self._op.dim, self._op.codim))
+        op = klass(
+            dim_shape=self._op.codim_shape,
+            codim_shape=self._op.dim_shape,
+        )
         op._op = self._op  # embed for introspection
         for p in op.properties():
             for name in p.arithmetic_methods():
@@ -1460,22 +1341,26 @@ class TransposeRule(Rule):
         return ("transpose", self._op)
 
     def _infer_op_klass(self) -> pxt.OpC:
-        # |----------------------|-----------------------|
-        # | op_klass(codim, dim) | opT_klass(codim, dim) |
-        # |----------------------|-----------------------|
-        # | LinFunc(1, N)        | LinOp(N, 1)           |
-        # | LinOp(N, 1)          | LinFunc(1, N)         |
-        # | SquareOp(N, N)       | SquareOp(N, N)        |
-        # |----------------------|-----------------------|
-        properties = self._op.properties()
-        if self._op.codim == self._op.dim == 1:
+        # |--------------------------------|--------------------------------|
+        # |      op_klass(codim; dim)      |     opT_klass(codim; dim)      |
+        # |--------------------------------|--------------------------------|
+        # | LINEAR(1; 1)                   | LinFunc(1; 1)                  |
+        # | LinFunc(1; M1,...,MD)          | LinOp(M1,...,MD; 1)            |
+        # | LinOp(N1,...,ND; 1)            | LinFunc(1; N1,...,ND)          |
+        # | op_klass(N1,...,ND; M1,...,MD) | op_klass(M1,...,MD; N1,...,ND) |
+        # |--------------------------------|--------------------------------|
+        single_dim = self._op.dim_shape == (1,)
+        single_codim = self._op.codim_shape == (1,)
+
+        if single_dim and single_codim:
             klass = pxo.LinFunc
-        elif pxo.Property.FUNCTIONAL in properties:
+        elif single_codim:
             klass = pxo.LinOp
-        elif self._op.dim == 1:
+        elif single_dim:
             klass = pxo.LinFunc
         else:
-            klass = pxo.Operator._infer_operator_type(properties)
+            prop = self._op.properties()
+            klass = pxo.Operator._infer_operator_type(prop)
         return klass
 
     @pxrt.enforce_precision(i="arr")
@@ -1490,9 +1375,6 @@ class TransposeRule(Rule):
         else:
             L = self._op.estimate_lipschitz(**kwargs)
         return L
-
-    def asloss(self, data: pxt.NDArray = None) -> pxt.OpT:
-        raise NotImplementedError
 
     @pxrt.enforce_precision(i=("arr", "tau"))
     def prox(self, arr: pxt.NDArray, tau: pxt.Real) -> pxt.NDArray:
@@ -1517,7 +1399,11 @@ class TransposeRule(Rule):
 
     def asarray(self, **kwargs) -> pxt.NDArray:
         A = self._op.asarray(**kwargs)
-        return A.T
+        B = A.transpose(
+            *range(-self._op.dim_rank, 0),
+            *range(self._op.codim_rank),
+        )
+        return B
 
     def gram(self) -> pxt.OpT:
         op = self._op.cogram()
@@ -1535,48 +1421,3 @@ class TransposeRule(Rule):
     def trace(self, **kwargs) -> pxt.Real:
         tr = self._op.trace(**kwargs)
         return tr
-
-
-# Helper Class/Functions ------------------------------------------------------
-def _Sum(M: int, N: int) -> pxt.OpT:
-    # f: \bR^{N} -> \bR^{M}
-    #      x     -> [sum(x), ..., sum(x)]  (M times)
-    @pxrt.enforce_precision(i="arr")
-    def op_apply(_, arr) -> pxt.NDArray:
-        xp = pxu.get_array_module(arr)
-        out = xp.broadcast_to(
-            arr.sum(axis=-1, keepdims=True),
-            (*arr.shape[:-1], _.codim),
-        )
-        return out
-
-    @pxrt.enforce_precision(i="arr")
-    def op_adjoint(_, arr) -> pxt.NDArray:
-        xp = pxu.get_array_module(arr)
-        out = xp.broadcast_to(
-            arr.sum(axis=-1, keepdims=True),
-            (*arr.shape[:-1], _.dim),
-        )
-        return out
-
-    def op_gram(_) -> pxt.OpT:
-        op = _Sum(M=_.dim, N=_.dim) * _.codim
-        return op
-
-    def op_cogram(_) -> pxt.OpT:
-        op = _Sum(M=_.codim, N=_.codim) * _.dim
-        return op
-
-    if M == 1:
-        klass = pxo.LinFunc
-    elif M == N:
-        klass = pxo.SelfAdjointOp
-    else:
-        klass = pxo.LinOp
-    op = klass(shape=(M, N))
-    op._lipschitz = np.sqrt(M * N)
-    op.apply = types.MethodType(op_apply, op)
-    op.adjoint = types.MethodType(op_adjoint, op)
-    op.gram = types.MethodType(op_gram, op)
-    op.cogram = types.MethodType(op_cogram, op)
-    return op

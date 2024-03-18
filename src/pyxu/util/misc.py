@@ -1,9 +1,12 @@
 import collections.abc as cabc
 import importlib
 import inspect
+import os
 import types
+import typing as typ
 
-import numpy as np
+import dask.array as da
+import zarr
 
 import pyxu.info.deps as pxd
 import pyxu.info.ptype as pxt
@@ -11,31 +14,11 @@ import pyxu.info.ptype as pxt
 __all__ = [
     "copy_if_unsafe",
     "import_module",
-    "infer_composition_shape",
-    "infer_sum_shape",
-    "next_fast_len",
     "parse_params",
     "read_only",
+    "save_zarr",
+    "load_zarr",
 ]
-
-
-def next_fast_len(N: pxt.Integer, even: bool = False) -> pxt.Integer:
-    """
-    Compute the next `5-smooth number <https://en.wikipedia.org/wiki/Smooth_number>`_ greater-or-equal to `N`.
-
-    If `even=True`, then ensure the next 5-smooth number is even-valued.
-    """
-    # warning: scipy.fftpack.next_fast_len() != scipy.fft.next_fast_len()
-    from scipy.fftpack import next_fast_len
-
-    N5 = next_fast_len(int(N))
-
-    is_even = lambda n: n % 2 == 0
-    if (not is_even(N5)) and even:
-        while not is_even(N5 := next_fast_len(N5)):
-            N5 += 1
-
-    return N5
 
 
 def peaks(x: pxt.NDArray, y: pxt.NDArray) -> pxt.NDArray:
@@ -245,23 +228,76 @@ def read_only(x: pxt.NDArray) -> pxt.NDArray:
     return y
 
 
-def infer_sum_shape(sh1: pxt.OpShape, sh2: pxt.OpShape) -> pxt.OpShape:
-    r"""
-    Infer shape of arithmetic operation :math:`A + B`.
+def save_zarr(filedir: pxt.Path, kw_in: dict[str, pxt.NDArray]) -> None:
     """
-    A, B, C, D = *sh1, *sh2
-    if B == D:
-        return np.broadcast_shapes((A,), (C,)) + (B,)
-    else:
-        raise ValueError(f"Addition of {sh1} and {sh2} operators forbidden.")
+    Saves an array to a Zarr file. If the array is a Dask array, it is saved with a
+    filename prefix "dask_". Otherwise, it is saved directly using Zarr's save function.
+
+    Parameters
+    ----------
+    filedir : Path
+        The directory path where the file will be saved.
+    kw_in : Dict[str, NDArray]
+        A dictionary where keys are the filenames and values are the arrays to be saved.
+
+    Returns
+    -------
+    None
+    """
+
+    for filename, array in kw_in.items():
+        try:
+            if array is not None:
+                if pxd.NDArrayInfo.from_obj(array) == pxd.NDArrayInfo.DASK:
+                    array.to_zarr(
+                    	filedir / ("dask_" + filename),
+                    	overwrite=True,
+                    	compute=True,
+                    )
+                else:
+                    zarr.save(filedir / filename, array)
+        except Exception as e:
+            print(f"Failed to save {filename}: {e}")
 
 
-def infer_composition_shape(sh1: pxt.OpShape, sh2: pxt.OpShape) -> pxt.OpShape:
-    r"""
-    Infer shape of arithmetic operation :math:`A \circ B`.
+def load_zarr(filepath: pxt.Path) -> dict[str, pxt.NDArray]:
     """
-    A, B, C, D = *sh1, *sh2
-    if B == C:
-        return (A, D)
-    else:
-        raise ValueError(f"Composition of {sh1} and {sh2} operators forbidden.")
+    Loads arrays from Zarr files within a specified directory. If a file is prefixed with "dask_",
+    it is loaded as a Dask array. Otherwise, it is loaded using Zarr's load function.
+
+    Parameters
+    ----------
+    filepath : pathlib.Path
+        The directory path from where the Zarr files will be loaded.
+
+    Returns
+    -------
+    kw_out : dict[str, NDArray]
+        A dictionary where keys are the filenames (with "dask_" prefix removed if present)
+        and values are the loaded arrays.
+    """
+
+    if not filepath.exists():
+        raise FileNotFoundError(f"The directory {filepath} does not exist.")
+
+    if not filepath.is_dir():
+        raise NotADirectoryError(f"{filepath} is not a directory.")
+
+    kw_out = {}
+    try:
+        files = os.listdir(filepath)
+    except Exception as e:
+        raise Exception(f"Failed to list directory contents: {e}")
+
+    for file in files:
+        try:
+            if file.startswith("dask_"):
+                array = da.from_zarr(filepath / file)
+                kw_out[file.replace("dask_", "")] = array
+            else:
+                array = zarr.load(filepath / file)
+                kw_out[file] = array
+        except Exception as e:
+            print(f"Failed to load {file}: {e}")
+
+    return kw_out

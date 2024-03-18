@@ -51,7 +51,6 @@ class Property(enum.Enum):
                 "_expr",
             ]
         )
-        data[self.FUNCTIONAL].append("asloss")
         data[self.PROXIMABLE].append("prox")
         data[self.DIFFERENTIABLE].extend(
             [
@@ -94,40 +93,71 @@ class Operator:
     # This is achieved by increasing __array_priority__ for all operators.
     __array_priority__ = np.inf
 
-    def __init__(self, shape: pxt.OpShape):
+    def __init__(
+        self,
+        dim_shape: pxt.NDArrayShape,
+        codim_shape: pxt.NDArrayShape,
+    ):
         r"""
         Parameters
         ----------
-        shape: OpShape
-            (N, M) operator shape.
+        dim_shape: NDArrayShape
+            (M1,...,MD) operator input shape.
+        codim_shape: NDArrayShape
+            (N1,...,NK) operator output shape.
         """
-        shape = pxu.as_canonical_shape(shape)
-        assert len(shape) == 2, f"shape: expected {pxt.OpShape}, got {shape}."
+        dim_shape = pxu.as_canonical_shape(dim_shape)
+        assert all(ax >= 1 for ax in dim_shape)
 
-        self._shape = shape
+        codim_shape = pxu.as_canonical_shape(codim_shape)
+        assert all(ax >= 1 for ax in codim_shape)
+
+        self._dim_shape = dim_shape
+        self._codim_shape = codim_shape
         self._name = self.__class__.__name__
 
     # Public Interface --------------------------------------------------------
     @property
-    def shape(self) -> pxt.OpShape:
+    def dim_shape(self) -> pxt.NDArrayShape:
         r"""
-        Return (N, M) operator shape.
+        Return shape of operator's domain. (M1,...,MD)
         """
-        return self._shape
+        return self._dim_shape
 
     @property
-    def dim(self) -> pxt.Integer:
+    def dim_size(self) -> pxt.Integer:
         r"""
-        Return dimension of operator's domain. (M)
+        Return size of operator's domain. (M1*...*MD)
         """
-        return self.shape[1]
+        return np.prod(self.dim_shape)
 
     @property
-    def codim(self) -> pxt.Integer:
+    def dim_rank(self) -> pxt.Integer:
         r"""
-        Return dimension of operator's co-domain. (N)
+        Return rank of operator's domain. (D)
         """
-        return self.shape[0]
+        return len(self.dim_shape)
+
+    @property
+    def codim_shape(self) -> pxt.NDArrayShape:
+        r"""
+        Return shape of operator's co-domain. (N1,...,NK)
+        """
+        return self._codim_shape
+
+    @property
+    def codim_size(self) -> pxt.Integer:
+        r"""
+        Return size of operator's co-domain. (N1*...*NK)
+        """
+        return np.prod(self.codim_shape)
+
+    @property
+    def codim_rank(self) -> pxt.Integer:
+        r"""
+        Return rank of operator's co-domain. (K)
+        """
+        return len(self.codim_shape)
 
     @classmethod
     def properties(cls) -> cabc.Set[Property]:
@@ -162,7 +192,7 @@ class Operator:
             Operator with the new interface.
 
             Fails when cast is forbidden.
-            (Ex: :py:class:`~pyxu.abc.Map` -> :py:class:`~pyxu.abc.Func` if codim > 1)
+            (Ex: :py:class:`~pyxu.abc.Map` -> :py:class:`~pyxu.abc.Func` if codim.size > 1)
 
         Notes
         -----
@@ -183,7 +213,10 @@ class Operator:
             # (p_shell > p_core) -> specializing to a sub-class of ``self``
             # OR
             # len(p_shell ^ p_core) > 0 -> specializing to another branch of the class hierarchy.
-            op = cast_to(shape=self.shape)
+            op = cast_to(
+                dim_shape=self.dim_shape,
+                codim_shape=self.codim_shape,
+            )
             op._core = self  # for debugging
 
             # Forward shared arithmetic fields from core to shell.
@@ -210,9 +243,9 @@ class Operator:
         Parameters
         ----------
         self: OpT
-            (A, B) Left operand.
+            Left operand.
         other: OpT
-            (C, D) Right operand.
+            Right operand.
 
         Returns
         -------
@@ -221,10 +254,10 @@ class Operator:
 
         Notes
         -----
-        Operand shapes must be `consistent`, i.e.:
+        Operand shapes must be consistent, i.e.:
 
-            * have `identical shape`, or
-            * be `range-broadcastable`, i.e. functional + map works.
+            * have `same dimensions`, and
+            * have `compatible co-dimensions` (after broadcasting).
 
         See Also
         --------
@@ -244,9 +277,9 @@ class Operator:
         Parameters
         ----------
         self: OpT
-            (A, B) Left operand.
+            Left operand.
         other: OpT
-            (C, D) Right operand.
+            Right operand.
 
         Returns
         -------
@@ -280,20 +313,18 @@ class Operator:
         Parameters
         ----------
         self: OpT
-            (A, B) Left operand.
+            Left operand.
         other: Real, OpT
-            (1,) scalar, or
-            (C, D) Right operand.
+            Scalar or right operand.
 
         Returns
         -------
         op: OpT
-            (A, B) scaled operator, or
-            (A, D) composed operator ``self * other``.
+            Scaled operator or composed operator ``self * other``.
 
         Notes
         -----
-        If called with two operators, their shapes must be `consistent`, i.e. B == C.
+        If called with two operators, their shapes must be `consistent`, i.e. ``self.dim_shape == other.codim_shape``.
 
         See Also
         --------
@@ -326,33 +357,8 @@ class Operator:
             return NotImplemented
 
     def __pow__(self, k: pxt.Integer) -> pxt.OpT:
-        """
-        Exponentiate an operator, i.e. compose it with itself.
-
-        Parameters
-        ----------
-        k: Integer
-            Number of times the operator is composed with itself.
-
-        Returns
-        -------
-        op: OpT
-            Exponentiated operator.
-
-        Notes
-        -----
-        Exponentiation is only allowed for endomorphisms, i.e. square operators.
-
-        See Also
-        --------
-        :py:class:`~pyxu.abc.arithmetic.PowerRule`
-        """
-        import pyxu.abc.arithmetic as arithmetic
-
-        if isinstance(k, pxt.Integer) and (k >= 0):
-            return arithmetic.PowerRule(op=self, k=k).op()
-        else:
-            return NotImplemented
+        # (op ** k) unsupported
+        return NotImplemented
 
     def __matmul__(self, other) -> pxt.OpT:
         # (op @ NDArray) unsupported
@@ -373,7 +379,7 @@ class Operator:
         Returns
         -------
         op: OpT
-            (N, M) domain-scaled operator.
+            Domain-scaled operator.
 
         See Also
         --------
@@ -384,19 +390,21 @@ class Operator:
         assert _is_real(scalar)
         return arithmetic.ArgScaleRule(op=self, cst=float(scalar)).op()
 
-    def argshift(self, shift: typ.Union[pxt.Real, pxt.NDArray]) -> pxt.OpT:
-        """
+    def argshift(self, shift: pxt.NDArray) -> pxt.OpT:
+        r"""
         Shift operator's domain.
 
         Parameters
         ----------
-        shift: Real, NDArray
-            (M,) shift value
+        shift: NDArray
+            Shift value :math:`c \in \mathbb{R}^{M_{1} \times\cdots\times M_{D}}`.
+
+            `shift` must be broadcastable with operator's dimension.
 
         Returns
         -------
         op: OpT
-            (N, M) domain-shifted operator.
+            Domain-shifted operator :math:`g(x) = f(x + c)`.
 
         See Also
         --------
@@ -404,8 +412,6 @@ class Operator:
         """
         import pyxu.abc.arithmetic as arithmetic
 
-        if _is_real(shift):
-            shift = float(shift)
         return arithmetic.ArgShiftRule(op=self, cst=shift).op()
 
     # Internal Helpers --------------------------------------------------------
@@ -418,29 +424,9 @@ class Operator:
         else:
             raise ValueError(f"No operator found with properties {prop}.")
 
-    def squeeze(self) -> pxt.OpT:
-        r"""
-        Cast an :py:class:`~pyxu.abc.Operator` to the right core operator sub-type given codomain dimension.
-        """
-        p = set(self.properties())
-        if self.codim == 1:
-            p.add(Property.FUNCTIONAL)
-            if Property.DIFFERENTIABLE in self.properties():
-                p.add(Property.DIFFERENTIABLE_FUNCTION)
-            if Property.LINEAR in self.properties():
-                for p_ in Property:
-                    if p_.name.startswith("LINEAR_"):
-                        p.discard(p_)
-                p.add(Property.PROXIMABLE)
-        elif self.codim == self.dim:
-            if Property.LINEAR in self.properties():
-                p.add(Property.LINEAR_SQUARE)
-        klass = self._infer_operator_type(p)
-        return self.asop(klass)
-
     def __repr__(self) -> str:
         klass = self._name
-        return f"{klass}{self.shape}"
+        return f"{klass}(dim={self.dim_shape}, codim={self.codim_shape})"
 
     def _expr(self) -> tuple:
         r"""
@@ -469,21 +455,21 @@ class Operator:
            import numpy as np
            import pyxu.abc as pxa
 
-           N = 5
-           op1 = pxa.LinFunc.from_array(np.arange(N))
-           op2 = pxa.LinOp.from_array(np.ones((N, N)))
-           op = ((2 * op1) + (op2 ** 3)).argshift(np.full(N, 4))
+           kwargs = dict(dim_shape=5, codim_shape=5)
+           op1 = pxa.LinOp(**kwargs)
+           op2 = pxa.DiffMap(**kwargs)
+           op = ((2 * op1) + (op1 * op2)).argshift(np.r_[1])
 
            print(op.expr())
-           # [argshift, ==> DiffMap(5, 5)
-           # .[add, ==> SquareOp(5, 5)
-           # ..[scale, ==> LinFunc(1, 5)
-           # ...LinFunc(1, 5),
+           # [argshift, ==> DiffMap(dim=(5,), codim=(5,))
+           # .[add, ==> DiffMap(dim=(5,), codim=(5,))
+           # ..[scale, ==> LinOp(dim=(5,), codim=(5,))
+           # ...LinOp(dim=(5,), codim=(5,)),
            # ...2.0],
-           # ..[exp, ==> SquareOp(5, 5)
-           # ...LinOp(5, 5),
-           # ...3]],
-           # .(5,)]
+           # ..[compose, ==> DiffMap(dim=(5,), codim=(5,))
+           # ...LinOp(dim=(5,), codim=(5,)),
+           # ...DiffMap(dim=(5,), codim=(5,))]],
+           # .(1,)]
         """
         fmt = lambda obj, lvl: ("." * lvl) + str(obj)
         lines = []
@@ -511,10 +497,116 @@ class Operator:
             out = out.strip(",")  # drop comma at top-level tail.
         return out
 
+    # Short-hands for commonly-used operators ---------------------------------
+    def squeeze(self, axes: pxt.NDArrayAxis = None) -> pxt.OpT:
+        """
+        Drop size-1 axes from co-dimension.
+
+        See Also
+        --------
+        :py:class:`~pyxu.operator.SqueezeAxes`
+        """
+
+        from pyxu.operator import SqueezeAxes
+
+        sq = SqueezeAxes(
+            dim_shape=self.codim_shape,
+            axes=axes,
+        )
+        op = sq * self
+        return op
+
+    def transpose(self, axes: pxt.NDArrayAxis = None) -> pxt.OpT:
+        """
+        Permute co-dimension axes.
+
+        See Also
+        --------
+        :py:class:`~pyxu.operator.TransposeAxes`
+        """
+
+        from pyxu.operator import TransposeAxes
+
+        tr = TransposeAxes(
+            dim_shape=self.codim_shape,
+            axes=axes,
+        )
+        op = tr * self
+        return op
+
+    def reshape(self, codim_shape: pxt.NDArrayShape) -> pxt.OpT:
+        """
+        Reshape co-dimension shape.
+
+        See Also
+        --------
+        :py:class:`~pyxu.operator.ReshapeAxes`
+        """
+
+        from pyxu.operator import ReshapeAxes
+
+        rsh = ReshapeAxes(
+            dim_shape=self.codim_shape,
+            codim_shape=codim_shape,
+        )
+        op = rsh * self
+        return op
+
+    def broadcast_to(self, codim_shape: pxt.NDArrayShape) -> pxt.OpT:
+        """
+        Broadcast co-dimension shape.
+
+        See Also
+        --------
+        :py:class:`~pyxu.operator.BroadcastAxes`
+        """
+
+        from pyxu.operator import BroadcastAxes
+
+        bcast = BroadcastAxes(
+            dim_shape=self.codim_shape,
+            codim_shape=codim_shape,
+        )
+        op = bcast * self
+        return op
+
+    def subsample(self, *indices) -> pxt.OpT:
+        """
+        Sub-sample co-dimension.
+
+        See Also
+        --------
+        :py:class:`~pyxu.operator.SubSample`
+        """
+
+        from pyxu.operator import SubSample
+
+        sub = SubSample(self.codim_shape, *indices)
+        op = sub * self
+        return op
+
+    def rechunk(self, chunks: dict) -> pxt.OpT:
+        """
+        Re-chunk core dimensions to new chunk size.
+
+        See Also
+        --------
+        :py:func:`~pyxu.operator.RechunkAxes`
+        """
+        from pyxu.operator import RechunkAxes
+
+        chk = RechunkAxes(
+            dim_shape=self.codim_shape,
+            chunks=chunks,
+        )
+        op = chk * self
+        return op
+
 
 class Map(Operator):
     r"""
-    Base class for real-valued maps :math:`\mathbf{f}: \mathbb{R}^{M} \to \mathbb{R}^{N}`.
+    Base class for real-valued maps :math:`\mathbf{f}: \mathbb{R}^{M_{1} \times\cdots\times M_{D}} \to \mathbb{R}^{N_{1}
+    \times\cdots\times N_{K}}`.
 
     Instances of this class must implement :py:meth:`~pyxu.abc.Map.apply`.
 
@@ -528,8 +620,15 @@ class Map(Operator):
         p.add(Property.CAN_EVAL)
         return frozenset(p)
 
-    def __init__(self, shape: pxt.OpShape):
-        super().__init__(shape=shape)
+    def __init__(
+        self,
+        dim_shape: pxt.NDArrayShape,
+        codim_shape: pxt.NDArrayShape,
+    ):
+        super().__init__(
+            dim_shape=dim_shape,
+            codim_shape=codim_shape,
+        )
         self.lipschitz = np.inf
 
     def apply(self, arr: pxt.NDArray) -> pxt.NDArray:
@@ -539,12 +638,12 @@ class Map(Operator):
         Parameters
         ----------
         arr: NDArray
-            (..., M) input points.
+            (..., M1,...,MD) input points.
 
         Returns
         -------
         out: NDArray
-            (..., N) output points.
+            (..., N1,...,NK) output points.
         """
         raise NotImplementedError
 
@@ -566,11 +665,11 @@ class Map(Operator):
           .. code-block:: python3
 
              class TestOp(Map):
-                 def __init__(self, shape):
-                     super().__init__(shape=shape)
+                 def __init__(self, dim_shape, codim_shape):
+                     super().__init__(dim_shape, codim_shape)
                      self.lipschitz = 2
 
-             op = TestOp(shape=(2, 3))
+             op = TestOp(2, 3)
              op.lipschitz  # => 2
 
 
@@ -579,10 +678,10 @@ class Map(Operator):
           .. code-block:: python3
 
              class TestOp(Map):
-                 def __init__(self, shape):
-                     super().__init__(shape=shape)
+                 def __init__(self, dim_shape, codim_shape):
+                     super().__init__(dim_shape, codim_shape)
 
-             op = TestOp(shape=(2,3))
+             op = TestOp(2, 3)
              op.lipschitz  # => inf, since unknown apriori
 
              op.lipschitz = 2  # post-init specification
@@ -627,18 +726,18 @@ class Map(Operator):
         * This method should always be callable without specifying any kwargs.
 
         * A constant :math:`L_{\mathbf{f}} > 0` is said to be a *Lipschitz constant* for a map :math:`\mathbf{f}:
-          \mathbb{R}^{M} \to \mathbb{R}^{N}` if:
+          \mathbb{R}^{M_{1} \times\cdots\times M_{D}} \to \mathbb{R}^{N_{1} \times\cdots\times N_{K}}` if:
 
           .. math::
 
-             \|\mathbf{f}(\mathbf{x}) - \mathbf{f}(\mathbf{y})\|_{\mathbb{R}^{N}}
+             \|\mathbf{f}(\mathbf{x}) - \mathbf{f}(\mathbf{y})\|_{\mathbb{R}^{N_{1} \times\cdots\times N_{K}}}
              \leq
-             L_{\mathbf{f}} \|\mathbf{x} - \mathbf{y}\|_{\mathbb{R}^{M}},
+             L_{\mathbf{f}} \|\mathbf{x} - \mathbf{y}\|_{\mathbb{R}^{M_{1} \times\cdots\times M_{D}}},
              \qquad
-             \forall \mathbf{x}, \mathbf{y}\in \mathbb{R}^{M},
+             \forall \mathbf{x}, \mathbf{y}\in \mathbb{R}^{M_{1} \times\cdots\times M_{D}},
 
-          where :math:`\|\cdot\|_{\mathbb{R}^{M}}` and :math:`\|\cdot\|_{\mathbb{R}^{N}}` are the canonical norms on
-          their respective spaces.
+          where :math:`\|\cdot\|_{\mathbb{R}^{M_{1} \times\cdots\times M_{D}}}` and :math:`\|\cdot\|_{\mathbb{R}^{N_{1}
+          \times\cdots\times N_{K}}}` are the canonical norms on their respective spaces.
 
           The smallest Lipschitz constant of a map is called the *optimal Lipschitz constant*.
         """
@@ -647,7 +746,8 @@ class Map(Operator):
 
 class Func(Map):
     r"""
-    Base class for real-valued functionals :math:`f: \mathbb{R}^{M} \to \mathbb{R}\cup\{+\infty\}`.
+    Base class for real-valued functionals :math:`f: \mathbb{R}^{M_{1} \times\cdots\times M_{D}} \to
+    \mathbb{R}\cup\{+\infty\}`.
 
     Instances of this class must implement :py:meth:`~pyxu.abc.Map.apply`.
 
@@ -661,34 +761,22 @@ class Func(Map):
         p.add(Property.FUNCTIONAL)
         return frozenset(p)
 
-    def __init__(self, shape: pxt.OpShape):
-        super().__init__(shape=shape)
-        assert self.codim == 1, f"shape: expected (1, n), got {shape}."
-
-    def asloss(self, data: pxt.NDArray = None) -> pxt.OpT:
-        """
-        Transform a functional into a loss functional.
-
-        The meaning of :py:meth:`~pyxu.abc.Func.asloss` is operator-dependent: always examine the output of
-        :py:meth:`~pyxu.abc.Operator.expr` to determine the loss-notion involved.
-
-        Parameters
-        ----------
-        data: NDArray
-            (M,) input.
-
-        Returns
-        -------
-        op: OpT
-            (1, M) loss function.
-            If `data` is unspecified, returns ``self``.
-        """
-        raise NotImplementedError
+    def __init__(
+        self,
+        dim_shape: pxt.NDArrayShape,
+        codim_shape: pxt.NDArrayShape,
+    ):
+        super().__init__(
+            dim_shape=dim_shape,
+            codim_shape=codim_shape,
+        )
+        assert (self.codim_size == 1) and (self.codim_rank == 1)
 
 
 class DiffMap(Map):
     r"""
-    Base class for real-valued differentiable maps :math:`\mathbf{f}: \mathbb{R}^{M} \to \mathbb{R}^{N}`.
+    Base class for real-valued differentiable maps :math:`\mathbf{f}: \mathbb{R}^{M_{1} \times\cdots\times M_{D}} \to
+    \mathbb{R}^{N_{1} \times\cdots\times N_{K}}`.
 
     Instances of this class must implement :py:meth:`~pyxu.abc.Map.apply` and :py:meth:`~pyxu.abc.DiffMap.jacobian`.
 
@@ -705,8 +793,15 @@ class DiffMap(Map):
         p.add(Property.DIFFERENTIABLE)
         return frozenset(p)
 
-    def __init__(self, shape: pxt.OpShape):
-        super().__init__(shape=shape)
+    def __init__(
+        self,
+        dim_shape: pxt.NDArrayShape,
+        codim_shape: pxt.NDArrayShape,
+    ):
+        super().__init__(
+            dim_shape=dim_shape,
+            codim_shape=codim_shape,
+        )
         self.diff_lipschitz = np.inf
 
     def jacobian(self, arr: pxt.NDArray) -> pxt.OpT:
@@ -716,39 +811,31 @@ class DiffMap(Map):
         Parameters
         ----------
         arr: NDArray
-            (M,) evaluation point.
+            (M1,...,MD) evaluation point.
 
         Returns
         -------
         op: OpT
-            (N, M) Jacobian operator at point `arr`.
+            Jacobian operator at point `arr`.
 
         Notes
         -----
-        Let :math:`\mathbf{f}=[f_{1}, \ldots, f_{N}]: \mathbb{R}^{M} \to \mathbb{R}^{N}` be a differentiable
-        multi-dimensional map.  The *Jacobian* (or *differential*) of :math:`\mathbf{f}` at :math:`\mathbf{z} \in
-        \mathbb{R}^{M}` is defined as the best linear approximator of :math:`\mathbf{f}` near :math:`\mathbf{z}`, in the
-        following sense:
+        Let :math:`\mathbf{f}: \mathbb{R}^{M_{1} \times\cdots\times M_{D}} \to \mathbb{R}^{N_{1} \times\cdots\times
+        N_{K}}` be a differentiable multi-dimensional map.  The *Jacobian* (or *differential*) of :math:`\mathbf{f}` at
+        :math:`\mathbf{z} \in \mathbb{R}^{M_{1} \times\cdots\times M_{D}}` is defined as the best linear approximator of
+        :math:`\mathbf{f}` near :math:`\mathbf{z}`, in the following sense:
 
         .. math::
 
-           \mathbf{f}(\mathbf{x}) - \mathbf{f}(\mathbf{z})
-           =
-           \mathbf{J}_{\mathbf{f}}(\mathbf{z}) (\mathbf{x} - \mathbf{z})
-           +
-           o(\| \mathbf{x} - \mathbf{z} \|)
-           \quad
-           \text{as} \quad \mathbf{x} \to \mathbf{z}.
+           \mathbf{f}(\mathbf{x}) - \mathbf{f}(\mathbf{z}) = \mathbf{J}_{\mathbf{f}}(\mathbf{z}) (\mathbf{x} -
+           \mathbf{z}) + o(\| \mathbf{x} - \mathbf{z} \|) \quad \text{as} \quad \mathbf{x} \to \mathbf{z}.
 
         The Jacobian admits the following matrix representation:
 
         .. math::
 
-           [\mathbf{J}_{\mathbf{f}}(\mathbf{x})]_{ij}
-           :=
-           \frac{\partial f_{i}}{\partial x_{j}}(\mathbf{x}),
-           \qquad
-           \forall (i,j) \in \{1,\ldots,N\} \times \{1,\ldots,M\}.
+           [\mathbf{J}_{\mathbf{f}}(\mathbf{x})]_{ij} := \frac{\partial f_{i}}{\partial x_{j}}(\mathbf{x}), \qquad
+           \forall (i,j) \in \{1,\ldots,N_{1}\cdots N_{K}\} \times \{1,\ldots,M_{1}\cdots M_{D}\}.
         """
         raise NotImplementedError
 
@@ -764,11 +851,11 @@ class DiffMap(Map):
           .. code-block:: python3
 
              class TestOp(DiffMap):
-                 def __init__(self, shape):
-                     super().__init__(shape=shape)
+                 def __init__(self, dim_shape, codim_shape):
+                     super().__init__(dim_shape, codim_shape)
                      self.diff_lipschitz = 2
 
-             op = TestOp(shape=(2, 3))
+             op = TestOp(2, 3)
              op.diff_lipschitz  # => 2
 
 
@@ -777,10 +864,10 @@ class DiffMap(Map):
           .. code-block:: python3
 
              class TestOp(DiffMap):
-                 def __init__(self, shape):
-                     super().__init__(shape=shape)
+                 def __init__(self, dim_shape, codim_shape):
+                     super().__init__(dim_shape, codim_shape)
 
-             op = TestOp(shape=(2,3))
+             op = TestOp(2, 3)
              op.diff_lipschitz  # => inf, since unknown apriori
 
              op.diff_lipschitz = 2  # post-init specification
@@ -825,18 +912,21 @@ class DiffMap(Map):
         * This method should always be callable without specifying any kwargs.
 
         * A Lipschitz constant :math:`L_{\mathbf{J}_{\mathbf{f}}} > 0` of the Jacobian map
-          :math:`\mathbf{J}_{\mathbf{f}}: \mathbb{R}^{M} \to \mathbb{R}^{N \times M}` is such that:
+          :math:`\mathbf{J}_{\mathbf{f}}: \mathbb{R}^{M_{1} \times\cdots\times M_{D}} \to \mathbb{R}^{(N_{1}
+          \times\cdots\times N_{K}) \times (M_{1} \times\cdots\times M_{D})}` is such that:
 
           .. math::
 
-             \|\mathbf{J}_{\mathbf{f}}(\mathbf{x}) - \mathbf{J}_{\mathbf{f}}(\mathbf{y})\|_{\mathbb{R}^{N \times M}}
+             \|\mathbf{J}_{\mathbf{f}}(\mathbf{x}) - \mathbf{J}_{\mathbf{f}}(\mathbf{y})\|_{\mathbb{R}^{(N_{1}
+             \times\cdots\times N_{K}) \times (M_{1} \times\cdots\times M_{D})}}
              \leq
-             L_{\mathbf{J}_{\mathbf{f}}} \|\mathbf{x} - \mathbf{y}\|_{\mathbb{R}^{M}},
+             L_{\mathbf{J}_{\mathbf{f}}} \|\mathbf{x} - \mathbf{y}\|_{\mathbb{R}^{M_{1} \times\cdots\times M_{D}}},
              \qquad
-             \forall \mathbf{x}, \mathbf{y} \in \mathbb{R}^{M},
+             \forall \mathbf{x}, \mathbf{y} \in \mathbb{R}^{M_{1} \times\cdots\times M_{D}},
 
-          where :math:`\|\cdot\|_{\mathbb{R}^{N \times M}}` and :math:`\|\cdot\|_{\mathbb{R}^{M}}` are the canonical
-          norms on their respective spaces.
+          where :math:`\|\cdot\|_{\mathbb{R}^{(N_{1} \times\cdots\times N_{K}) \times (M_{1} \times\cdots\times
+          M_{D})}}` and :math:`\|\cdot\|_{\mathbb{R}^{M_{1} \times\cdots\times M_{D}}}` are the canonical norms on their
+          respective spaces.
 
           The smallest Lipschitz constant of the Jacobian is called the *optimal diff-Lipschitz constant*.
         """
@@ -845,11 +935,12 @@ class DiffMap(Map):
 
 class ProxFunc(Func):
     r"""
-    Base class for real-valued proximable functionals :math:`f: \mathbb{R}^{M} \to \mathbb{R} \cup \{+\infty\}`.
+    Base class for real-valued proximable functionals :math:`f: \mathbb{R}^{M_{1} \times\cdots\times M_{D}} \to
+    \mathbb{R} \cup \{+\infty\}`.
 
-    A functional :math:`f: \mathbb{R}^{M} \to \mathbb{R} \cup \{+\infty\}` is said *proximable* if its **proximity
-    operator** (see :py:meth:`~pyxu.abc.ProxFunc.prox` for a definition) admits a *simple closed-form expression* **or**
-    can be evaluated *efficiently* and with *high accuracy*.
+    A functional :math:`f: \mathbb{R}^{M_{1} \times\cdots\times M_{D}} \to \mathbb{R} \cup \{+\infty\}` is said
+    *proximable* if its **proximity operator** (see :py:meth:`~pyxu.abc.ProxFunc.prox` for a definition) admits a
+    *simple closed-form expression* **or** can be evaluated *efficiently* and with *high accuracy*.
 
     Instances of this class must implement :py:meth:`~pyxu.abc.Map.apply` and :py:meth:`~pyxu.abc.ProxFunc.prox`.
 
@@ -863,8 +954,15 @@ class ProxFunc(Func):
         p.add(Property.PROXIMABLE)
         return frozenset(p)
 
-    def __init__(self, shape: pxt.OpShape):
-        super().__init__(shape=shape)
+    def __init__(
+        self,
+        dim_shape: pxt.NDArrayShape,
+        codim_shape: pxt.NDArrayShape,
+    ):
+        super().__init__(
+            dim_shape=dim_shape,
+            codim_shape=codim_shape,
+        )
 
     def prox(self, arr: pxt.NDArray, tau: pxt.Real) -> pxt.NDArray:
         r"""
@@ -873,27 +971,28 @@ class ProxFunc(Func):
         Parameters
         ----------
         arr: NDArray
-            (..., M) input points.
+            (..., M1,...,MD) input points.
         tau: Real
             Positive scale factor.
 
         Returns
         -------
         out: NDArray
-            (..., M) proximal evaluations.
+            (..., M1,...,MD) proximal evaluations.
 
         Notes
         -----
-        For :math:`\tau >0`, the *proximity operator* of a scaled functional :math:`f: \mathbb{R}^{M} \to \mathbb{R}` is
-        defined as:
+        For :math:`\tau >0`, the *proximity operator* of a scaled functional :math:`f: \mathbb{R}^{M_{1}
+        \times\cdots\times M_{D}} \to \mathbb{R}` is defined as:
 
         .. math::
 
            \mathbf{\text{prox}}_{\tau f}(\mathbf{z})
            :=
-           \arg\min_{\mathbf{x}\in\mathbb{R}^{M}} f(x)+\frac{1}{2\tau} \|\mathbf{x}-\mathbf{z}\|_{2}^{2},
+           \arg\min_{\mathbf{x}\in\mathbb{R}^{M_{1} \times\cdots\times M_{D}}}
+           f(x)+\frac{1}{2\tau} \|\mathbf{x}-\mathbf{z}\|_{2}^{2},
            \quad
-           \forall \mathbf{z} \in \mathbb{R}^{M}.
+           \forall \mathbf{z} \in \mathbb{R}^{M_{1} \times\cdots\times M_{D}}.
         """
         raise NotImplementedError
 
@@ -906,14 +1005,14 @@ class ProxFunc(Func):
         Parameters
         ----------
         arr: NDArray
-            (..., M) input points.
+            (..., M1,...,MD) input points.
         sigma: Real
             Positive scale factor.
 
         Returns
         -------
         out: NDArray
-            (..., M) proximal evaluations.
+            (..., M1,...,MD) proximal evaluations.
 
         Notes
         -----
@@ -923,7 +1022,8 @@ class ProxFunc(Func):
 
            f^{\ast}(\mathbf{z})
            :=
-           \max_{\mathbf{x}\in\mathbb{R}^{M}} \langle \mathbf{x},\mathbf{z} \rangle - f(\mathbf{x}).
+           \max_{\mathbf{x}\in\mathbb{R}^{M_{1} \times\cdots\times M_{D}}}
+           \langle \mathbf{x},\mathbf{z} \rangle - f(\mathbf{x}).
 
         From *Moreau's identity*, its proximal operator is given by:
 
@@ -933,10 +1033,7 @@ class ProxFunc(Func):
            =
            \mathbf{z} - \sigma \mathbf{\text{prox}}_{f/\sigma}(\mathbf{z}/\sigma).
         """
-        out = self.prox(arr=arr / sigma, tau=1 / sigma)
-        out = pxu.copy_if_unsafe(out)
-        out *= -sigma
-        out += arr
+        out = arr - sigma * self.prox(arr=arr / sigma, tau=1 / sigma)
         return out
 
     def moreau_envelope(self, mu: pxt.Real) -> pxt.OpT:
@@ -955,15 +1052,15 @@ class ProxFunc(Func):
 
         Notes
         -----
-        Consider a convex non-smooth proximable functional :math:`f: \mathbb{R}^{M} \to \mathbb{R} \cup \{+\infty\}` and
-        a regularization parameter :math:`\mu > 0`.  The :math:`\mu`-*Moreau envelope* (or *Moreau-Yoshida envelope*) of
-        :math:`f` is given by
+        Consider a convex non-smooth proximable functional :math:`f: \mathbb{R}^{M_{1} \times\cdots\times M_{D}} \to
+        \mathbb{R} \cup \{+\infty\}` and a regularization parameter :math:`\mu > 0`.  The :math:`\mu`-*Moreau envelope*
+        (or *Moreau-Yoshida envelope*) of :math:`f` is given by
 
         .. math::
 
            f^{\mu}(\mathbf{x})
            =
-           \min_{\mathbf{z} \in \mathbb{R}^{M}}
+           \min_{\mathbf{z} \in \mathbb{R}^{M_{1} \times\cdots\times M_{D}}}
            f(\mathbf{z})
            \quad + \quad
            \frac{1}{2\mu} \|\mathbf{x} - \mathbf{z}\|^{2}.
@@ -1002,57 +1099,55 @@ class ProxFunc(Func):
 
            class L1Norm(ProxFunc):
                def __init__(self, dim: int):
-                   super().__init__(shape=(1, dim))
+                   super().__init__(dim_shape=dim, codim_shape=1)
                def apply(self, arr):
                    return np.linalg.norm(arr, axis=-1, keepdims=True, ord=1)
                def prox(self, arr, tau):
                    return np.clip(np.abs(arr)-tau, a_min=0, a_max=None) * np.sign(arr)
 
-           N = 512
-           l1_norm = L1Norm(dim=N)
-           mus = [0.1, 0.5, 1]
-           smooth_l1_norms = [l1_norm.moreau_envelope(mu) for mu in mus]
+           mu = [0.1, 0.5, 1]
+           f = [L1Norm(dim=1).moreau_envelope(_mu) for _mu in mu]
+           x = np.linspace(-1, 1, 512).reshape(-1, 1)  # evaluation points
 
-           x = np.linspace(-1, 1, N)[:, None]
-           labels=['mu=0']
-           labels.extend([f'mu={mu}' for mu in mus])
-           plt.figure()
-           plt.plot(x, l1_norm(x))
-           for f in smooth_l1_norms:
-               plt.plot(x, f(x))
-           plt.legend(labels)
-           plt.title('Moreau Envelope')
-
-           labels=[f'mu={mu}' for mu in mus]
-           plt.figure()
-           for f in smooth_l1_norms:
-               plt.plot(x, f.grad(x))
-           plt.legend(labels)
-           plt.title('Derivative of Moreau Envelope')
+           fig, ax = plt.subplots(ncols=2)
+           for _mu, _f in zip(mu, f):
+               ax[0].plot(x, _f(x), label=f"mu={_mu}")
+               ax[1].plot(x, _f.grad(x), label=f"mu={_mu}")
+           ax[0].set_title('Moreau Envelope')
+           ax[1].set_title("Derivative of Moreau Envelope")
+           for _ax in ax:
+               _ax.legend()
+               _ax.set_aspect("equal")
+           fig.tight_layout()
         """
         from pyxu.operator.interop import from_source
 
         assert mu > 0, f"mu: expected positive, got {mu}"
 
         @pxrt.enforce_precision(i="arr")
-        def op_apply(_, arr):
-            from pyxu.math import norm
+        def op_apply(_, arr: pxt.NDArray) -> pxt.NDArray:
+            xp = pxu.get_array_module(arr)
 
             x = self.prox(arr, tau=_._mu)
-            out = pxu.copy_if_unsafe(self.apply(x))
-            out += (0.5 / _._mu) * norm(arr - x, axis=-1, keepdims=True) ** 2
+            y = xp.sum(
+                (arr - x) ** 2,
+                axis=tuple(range(-self.dim_rank, 0)),
+            )[..., np.newaxis]
+            y *= 0.5 / _._mu
+
+            out = self.apply(x) + y
             return out
 
         @pxrt.enforce_precision(i="arr")
         def op_grad(_, arr):
-            x = arr.copy()
-            x -= self.prox(arr, tau=_._mu)
-            x /= _._mu
-            return x
+            out = arr - self.prox(arr, tau=_._mu)
+            out /= _._mu
+            return out
 
         op = from_source(
             cls=DiffFunc,
-            shape=self.shape,
+            dim_shape=self.dim_shape,
+            codim_shape=self.codim_shape,
             embed=dict(
                 _name="moreau_envelope",
                 _mu=mu,
@@ -1067,7 +1162,8 @@ class ProxFunc(Func):
 
 class DiffFunc(DiffMap, Func):
     r"""
-    Base class for real-valued differentiable functionals :math:`f: \mathbb{R}^{M} \to \mathbb{R}`.
+    Base class for real-valued differentiable functionals :math:`f: \mathbb{R}^{M_{1} \times\cdots\times M_{D}} \to
+    \mathbb{R}`.
 
     Instances of this class must implement :py:meth:`~pyxu.abc.Map.apply` and :py:meth:`~pyxu.abc.DiffFunc.grad`.
 
@@ -1084,13 +1180,25 @@ class DiffFunc(DiffMap, Func):
         p.add(Property.DIFFERENTIABLE_FUNCTION)
         return frozenset(p)
 
-    def __init__(self, shape: pxt.OpShape):
-        DiffMap.__init__(self, shape)
-        Func.__init__(self, shape)
+    def __init__(
+        self,
+        dim_shape: pxt.NDArrayShape,
+        codim_shape: pxt.NDArrayShape,
+    ):
+        for klass in [DiffMap, Func]:
+            klass.__init__(
+                self,
+                dim_shape=dim_shape,
+                codim_shape=codim_shape,
+            )
 
     @pxrt.enforce_precision(i="arr", o=False)
     def jacobian(self, arr: pxt.NDArray) -> pxt.OpT:
-        return LinFunc.from_array(self.grad(arr))
+        op = LinFunc.from_array(
+            A=self.grad(arr)[np.newaxis, ...],
+            dim_rank=self.dim_rank,
+        )
+        return op
 
     def grad(self, arr: pxt.NDArray) -> pxt.NDArray:
         r"""
@@ -1099,17 +1207,17 @@ class DiffFunc(DiffMap, Func):
         Parameters
         ----------
         arr: NDArray
-            (..., M) input points.
+            (..., M1,...,MD) input points.
 
         Returns
         -------
         out: NDArray
-            (..., M) gradients.
+            (..., M1,...,MD) gradients.
 
         Notes
         -----
-        The gradient of a functional :math:`f: \mathbb{R}^{M} \to \mathbb{R}` is given, for every :math:`\mathbf{x} \in
-        \mathbb{R}^{M}`, by
+        The gradient of a functional :math:`f: \mathbb{R}^{M_{1} \times\cdots\times M_{D}} \to \mathbb{R}` is given, for
+        every :math:`\mathbf{x} \in \mathbb{R}^{M_{1} \times\cdots\times M_{D}}`, by
 
         .. math::
 
@@ -1126,7 +1234,8 @@ class DiffFunc(DiffMap, Func):
 
 class ProxDiffFunc(ProxFunc, DiffFunc):
     r"""
-    Base class for real-valued differentiable *and* proximable functionals :math:`f:\mathbb{R}^{M} \to \mathbb{R}`.
+    Base class for real-valued differentiable *and* proximable functionals :math:`f:\mathbb{R}^{M_{1} \times\cdots\times
+    M_{D}} \to \mathbb{R}`.
 
     Instances of this class must implement :py:meth:`~pyxu.abc.Map.apply`, :py:meth:`~pyxu.abc.DiffFunc.grad`, and
     :py:meth:`~pyxu.abc.ProxFunc.prox`.
@@ -1143,15 +1252,24 @@ class ProxDiffFunc(ProxFunc, DiffFunc):
             p |= klass.properties()
         return frozenset(p)
 
-    def __init__(self, shape: pxt.OpShape):
-        ProxFunc.__init__(self, shape)
-        DiffFunc.__init__(self, shape)
+    def __init__(
+        self,
+        dim_shape: pxt.NDArrayShape,
+        codim_shape: pxt.NDArrayShape,
+    ):
+        for klass in [ProxFunc, DiffFunc]:
+            klass.__init__(
+                self,
+                dim_shape=dim_shape,
+                codim_shape=codim_shape,
+            )
 
 
 class QuadraticFunc(ProxDiffFunc):
-    # This is a special abstract base class with more __init__ parameters than `shape`.
+    # This is a special abstract base class with more __init__ parameters than `dim/codim_shape`.
     r"""
-    Base class for quadratic functionals :math:`f: \mathbb{R}^{M} \to \mathbb{R} \cup \{+\infty\}`.
+    Base class for quadratic functionals :math:`f: \mathbb{R}^{M_{1} \times\cdots\times M_{D}} \to \mathbb{R} \cup
+    \{+\infty\}`.
 
     The quadratic functional is defined as:
 
@@ -1161,13 +1279,14 @@ class QuadraticFunc(ProxDiffFunc):
        =
        \frac{1}{2} \langle\mathbf{x}, \mathbf{Q}\mathbf{x}\rangle
        +
-       \mathbf{c}^T\mathbf{x}
+       \langle\mathbf{c},\mathbf{x}\rangle
        +
        t,
-       \qquad \forall \mathbf{x} \in \mathbb{R}^{M},
+       \qquad \forall \mathbf{x} \in \mathbb{R}^{M_{1} \times\cdots\times M_{D}},
 
-    where :math:`Q` is a positive-definite operator :math:`\mathbf{Q}:\mathbb{R}^{M} \to \mathbb{R}^{M}`,
-    :math:`\mathbf{c} \in \mathbb{R}^{M}`, and :math:`t > 0`.
+    where :math:`Q` is a positive-definite operator :math:`\mathbf{Q}:\mathbb{R}^{M_{1} \times\cdots\times M_{D}} \to
+    \mathbb{R}^{M_{1} \times\cdots\times M_{D}}`, :math:`\mathbf{c} \in \mathbb{R}^{M_{1} \times\cdots\times M_{D}}`,
+    and :math:`t > 0`.
 
     Its gradient is given by:
 
@@ -1202,7 +1321,8 @@ class QuadraticFunc(ProxDiffFunc):
 
     def __init__(
         self,
-        shape: pxt.OpShape,
+        dim_shape: pxt.NDArrayShape,
+        codim_shape: pxt.NDArrayShape,
         # required in place of `dim` to have uniform interface with Operator hierarchy.
         Q: "PosDefOp" = None,
         c: "LinFunc" = None,
@@ -1212,34 +1332,39 @@ class QuadraticFunc(ProxDiffFunc):
         Parameters
         ----------
         Q: ~pyxu.abc.PosDefOp
-            (N, N) positive-definite operator. (Default: Identity)
+            Positive-definite operator. (Default: Identity)
         c: ~pyxu.abc.LinFunc
-            (1, N) linear functional. (Default: NullFunc)
+            Linear functional. (Default: NullFunc)
         t: Real
-            offset. (Default: 0)
+            Offset. (Default: 0)
         """
         from pyxu.operator import IdentityOp, NullFunc
 
-        super().__init__(shape=shape)
+        super().__init__(
+            dim_shape=dim_shape,
+            codim_shape=codim_shape,
+        )
 
         # Do NOT access (_Q, _c, _t) directly through `self`:
         # their values may not reflect the true (Q, c, t) parameterization.
         # (Reason: arithmetic propagation.)
         # Always access (Q, c, t) by querying the arithmetic method `_quad_spec()`.
-        self._Q = IdentityOp(dim=self.dim) if (Q is None) else Q
-        self._c = NullFunc(dim=self.dim) if (c is None) else c
+        self._Q = IdentityOp(dim_shape=self.dim_shape) if (Q is None) else Q
+        self._c = NullFunc(dim_shape=self.dim_shape) if (c is None) else c
         self._t = t
 
         # ensure dimensions are consistent if None-initialized
-        assert self._Q.shape == (self.dim, self.dim)
-        assert self._c.shape == self.shape
+        assert self._Q.dim_shape == self.dim_shape
+        assert self._Q.codim_shape == self.dim_shape
+        assert self._c.dim_shape == self.dim_shape
+        assert self._c.codim_shape == self.codim_shape
 
         self.diff_lipschitz = self._Q.lipschitz
 
     @pxrt.enforce_precision(i="arr")
     def apply(self, arr: pxt.NDArray) -> pxt.NDArray:
         Q, c, t = self._quad_spec()
-        out = (arr * Q.apply(arr)).sum(axis=-1, keepdims=True)
+        out = (arr * Q.apply(arr)).sum(axis=tuple(range(-self.dim_rank, 0)))[..., np.newaxis]
         out /= 2
         out += c.apply(arr)
         out += t
@@ -1248,8 +1373,7 @@ class QuadraticFunc(ProxDiffFunc):
     @pxrt.enforce_precision(i="arr")
     def grad(self, arr: pxt.NDArray) -> pxt.NDArray:
         Q, c, _ = self._quad_spec()
-        out = pxu.copy_if_unsafe(Q.apply(arr))
-        out += c.grad(arr)
+        out = Q.apply(arr) + c.grad(arr)
         return out
 
     @pxrt.enforce_precision(i=("arr", "tau"))
@@ -1259,24 +1383,18 @@ class QuadraticFunc(ProxDiffFunc):
         from pyxu.opt.stop import MaxIter
 
         Q, c, _ = self._quad_spec()
-        A = Q + HomothetyOp(cst=1 / tau, dim=Q.dim)
+        A = Q + HomothetyOp(cst=1 / tau, dim_shape=Q.dim_shape)
         b = arr.copy()
         b /= tau
         b -= c.grad(arr)
 
         slvr = CG(A=A, show_progress=False)
 
-        sentinel = MaxIter(n=2 * A.dim)
+        sentinel = MaxIter(n=2 * A.dim_size)
         stop_crit = slvr.default_stop_crit() | sentinel
 
         slvr.fit(b=b, stop_crit=stop_crit)
         return slvr.solution()
-
-    def asloss(self, data: pxt.NDArray = None) -> pxt.OpT:
-        from pyxu.operator import shift_loss
-
-        op = shift_loss(op=self, data=data)
-        return op
 
     def estimate_diff_lipschitz(self, **kwargs) -> pxt.Real:
         Q, *_ = self._quad_spec()
@@ -1294,7 +1412,8 @@ class QuadraticFunc(ProxDiffFunc):
 
 class LinOp(DiffMap):
     r"""
-    Base class for real-valued linear operators :math:`\mathbf{A}: \mathbb{R}^{M} \to \mathbb{R}^{N}`.
+    Base class for real-valued linear operators :math:`\mathbf{A}: \mathbb{R}^{M_{1} \times\cdots\times M_{D}} \to
+    \mathbb{R}^{N_{1} \times\cdots\times N_{K}}`.
 
     Instances of this class must implement :py:meth:`~pyxu.abc.Map.apply` and :py:meth:`~pyxu.abc.LinOp.adjoint`.
 
@@ -1323,8 +1442,15 @@ class LinOp(DiffMap):
         p.add(Property.LINEAR)
         return frozenset(p)
 
-    def __init__(self, shape: pxt.OpShape):
-        super().__init__(shape=shape)
+    def __init__(
+        self,
+        dim_shape: pxt.NDArrayShape,
+        codim_shape: pxt.NDArrayShape,
+    ):
+        super().__init__(
+            dim_shape=dim_shape,
+            codim_shape=codim_shape,
+        )
         self.diff_lipschitz = 0
 
     def adjoint(self, arr: pxt.NDArray) -> pxt.NDArray:
@@ -1334,25 +1460,27 @@ class LinOp(DiffMap):
         Parameters
         ----------
         arr: NDArray
-            (..., N) input points.
+            (..., N1,...,NK) input points.
 
         Returns
         -------
         out: NDArray
-            (..., M) adjoint evaluations.
+            (..., M1,...,MD) adjoint evaluations.
 
         Notes
         -----
-        The *adjoint* :math:`\mathbf{A}^{\ast}: \mathbb{R}^{N} \to \mathbb{R}^{M}` of :math:`\mathbf{A}: \mathbb{R}^{M}
-        \to \mathbb{R}^{N}` is defined as:
+        The *adjoint* :math:`\mathbf{A}^{\ast}: \mathbb{R}^{N_{1} \times\cdots\times N_{K}} \to \mathbb{R}^{M_{1}
+        \times\cdots\times M_{D}}` of :math:`\mathbf{A}: \mathbb{R}^{M_{1} \times\cdots\times M_{D}} \to
+        \mathbb{R}^{N_{1} \times\cdots\times N_{K}}` is defined as:
 
         .. math::
 
-           \langle \mathbf{x}, \mathbf{A}^{\ast}\mathbf{y}\rangle_{\mathbb{R}^{M}}
+           \langle \mathbf{x}, \mathbf{A}^{\ast}\mathbf{y}\rangle_{\mathbb{R}^{M_{1} \times\cdots\times M_{D}}}
            :=
-           \langle \mathbf{A}\mathbf{x}, \mathbf{y}\rangle_{\mathbb{R}^{N}},
+           \langle \mathbf{A}\mathbf{x}, \mathbf{y}\rangle_{\mathbb{R}^{N_{1} \times\cdots\times N_{K}}},
            \qquad
-           \forall (\mathbf{x},\mathbf{y})\in \mathbb{R}^{M} \times \mathbb{R}^{N}.
+           \forall (\mathbf{x},\mathbf{y})\in \mathbb{R}^{M_{1} \times\cdots\times M_{D}} \times \mathbb{R}^{N_{1}
+           \times\cdots\times N_{K}}.
         """
         raise NotImplementedError
 
@@ -1362,58 +1490,11 @@ class LinOp(DiffMap):
     @property
     def T(self) -> pxt.OpT:
         r"""
-        Return the (M, N) adjoint of :math:`\mathbf{A}`.
+        Return the adjoint of :math:`\mathbf{A}`.
         """
         import pyxu.abc.arithmetic as arithmetic
 
         return arithmetic.TransposeRule(op=self).op()
-
-    def to_sciop(
-        self,
-        dtype: pxt.DType = None,
-        gpu: bool = False,
-    ) -> spsl.LinearOperator:
-        r"""
-        Cast a :py:class:`~pyxu.abc.LinOp` to a CPU/GPU :py:class:`~scipy.sparse.linalg.LinearOperator`, compatible with
-        the matrix-free linear algebra routines of :py:mod:`scipy.sparse.linalg`.
-
-        Parameters
-        ----------
-        dtype: DType
-            Working precision of the linear operator.
-        gpu: bool
-            Operate on CuPy inputs (True) vs. NumPy inputs (False).
-
-        Returns
-        -------
-        op: ~scipy.sparse.linalg.LinearOperator
-            Linear operator object compliant with SciPy's interface.
-        """
-
-        def matmat(arr):
-            with pxrt.EnforcePrecision(False):
-                return self.apply(arr.T).T
-
-        def rmatmat(arr):
-            with pxrt.EnforcePrecision(False):
-                return self.adjoint(arr.T).T
-
-        if dtype is None:
-            dtype = pxrt.getPrecision().value
-
-        if gpu:
-            assert pxd.CUPY_ENABLED
-            import cupyx.scipy.sparse.linalg as spx
-        else:
-            spx = spsl
-        return spx.LinearOperator(
-            shape=self.shape,
-            matvec=matmat,
-            rmatvec=rmatmat,
-            matmat=matmat,
-            rmatmat=rmatmat,
-            dtype=dtype,
-        )
 
     def estimate_lipschitz(self, **kwargs) -> pxt.Real:
         r"""
@@ -1452,28 +1533,17 @@ class LinOp(DiffMap):
             # svdvals() may have alternative signature in specialized classes, but we must always use
             # the LinOp.svdvals() interface below for kwargs-filtering.
             func, sig_func = self.__class__.svdvals, LinOp.svdvals
-            kwargs.update(
-                k=1,
-                which="LM",
-            )
+            kwargs.update(k=1)
             estimate = lambda: func(self, **kwargs).item()
         elif method == "trace":
-            if self.shape == (1, 1):
-                # [Sepand] Special case of degenerate LinOps (which are not LinFuncs).
-                # Cannot call .gram() below since it will recurse indefinitely.
-                # [Reason: asop().squeeze() combinations don't work for (1, 1) degenerate LinOps.]
-                func = sig_func = LinFunc.estimate_lipschitz
-                estimate = lambda: func(self.squeeze(), **kwargs)
-            else:
-                from pyxu.math import hutchpp as func
+            from pyxu.math import hutchpp as func
 
-                sig_func = func
-
-                kwargs.update(
-                    op=self.gram() if (self.codim >= self.dim) else self.cogram(),
-                    m=kwargs.get("m", 126),
-                )
-                estimate = lambda: np.sqrt(func(**kwargs)).item()
+            sig_func = func
+            kwargs.update(
+                op=self.gram() if (self.codim_size >= self.dim_size) else self.cogram(),
+                m=kwargs.get("m", 126),
+            )
+            estimate = lambda: np.sqrt(func(**kwargs)).item()
         else:
             raise NotImplementedError
 
@@ -1488,24 +1558,21 @@ class LinOp(DiffMap):
     def svdvals(
         self,
         k: pxt.Integer,
-        which: str = "LM",
         gpu: bool = False,
+        dtype: pxt.DType = None,
         **kwargs,
     ) -> pxt.NDArray:
         r"""
-        Compute singular values of a linear operator.
+        Compute leading singular values of the linear operator.
 
         Parameters
         ----------
         k: Integer
             Number of singular values to compute.
-        which: "LM" | "SM"
-            Which `k` singular values to find:
-
-                * `LM`: largest magnitude
-                * `SM`: smallest magnitude
         gpu: bool
             If ``True`` the singular value decomposition is performed on the GPU.
+        dtype: DType
+            Working precision of the linear operator.
         kwargs: ~collections.abc.Mapping
             Additional kwargs accepted by :py:func:`~scipy.sparse.linalg.svds`.
 
@@ -1514,18 +1581,20 @@ class LinOp(DiffMap):
         D: NDArray
             (k,) singular values in ascending order.
         """
-        which = which.upper().strip()
-        assert which in {"SM", "LM"}
+        if dtype is None:
+            dtype = pxrt.getPrecision().value
 
         def _dense_eval():
             if gpu:
+                assert pxd.CUPY_ENABLED
                 import cupy as xp
                 import cupy.linalg as spx
             else:
                 import numpy as xp
                 import scipy.linalg as spx
-            op = self.asarray(xp=xp, dtype=pxrt.getPrecision().value)
-            return spx.svd(op, compute_uv=False)
+            A = self.asarray(xp=xp, dtype=dtype)
+            B = A.reshape(self.codim_size, self.dim_size)
+            return spx.svd(B, compute_uv=False)
 
         def _sparse_eval():
             if gpu:
@@ -1535,7 +1604,21 @@ class LinOp(DiffMap):
                 self._warn_vals_sparse_gpu()
             else:
                 spx = spsl
-            op = self.to_sciop(gpu=gpu, dtype=pxrt.getPrecision().value)
+            from pyxu.operator import ReshapeAxes
+            from pyxu.operator.interop import to_sciop
+
+            # SciPy's LinearOperator only understands 2D linear operators.
+            # -> wrap `self` into 2D form for SVD computations.
+            lhs = ReshapeAxes(dim_shape=self.codim_shape, codim_shape=self.codim_size)
+            rhs = ReshapeAxes(dim_shape=self.dim_size, codim_shape=self.dim_shape)
+            op = to_sciop(
+                op=lhs * self * rhs,
+                gpu=gpu,
+                dtype=dtype,
+            )
+
+            which = kwargs.get("which", "LM")
+            assert which.upper() == "LM", "Only computing leading singular values is supported."
             kwargs.update(
                 k=k,
                 which=which,
@@ -1544,17 +1627,16 @@ class LinOp(DiffMap):
             )
             return spx.svds(op, **kwargs)
 
-        if k >= min(self.shape) // 2:
+        if k >= min(self.dim_size, self.codim_size) // 2:
             msg = "Too many svdvals wanted: using matrix-based ops."
             warnings.warn(msg, pxw.DenseWarning)
             D = _dense_eval()
         else:
             D = _sparse_eval()
 
-        # Filter to k largest/smallest magnitude + sorted
+        # Filter to k largest magnitude + sorted
         xp = pxu.get_array_module(D)
-        D = D[xp.argsort(D)]
-        return D[:k] if (which == "SM") else D[-k:]
+        return D[xp.argsort(D)][-k:]
 
     def asarray(
         self,
@@ -1574,7 +1656,7 @@ class LinOp(DiffMap):
         Returns
         -------
         A: NDArray
-            (N, M) array-representation of the operator.
+            (*codim_shape, *dim_shape) array-representation of the operator.
 
         Note
         ----
@@ -1586,19 +1668,23 @@ class LinOp(DiffMap):
         if dtype is None:
             dtype = pxrt.getPrecision().value
 
+        E = xp.eye(self.dim_size, dtype=dtype).reshape(*self.dim_shape, *self.dim_shape)
         with pxrt.EnforcePrecision(False):
-            E = xp.eye(self.dim, dtype=dtype)
-            A = self.apply(E).T
-        return A
+            A = self.apply(E)  # (*dim_shape, *codim_shape)
+
+        axes = tuple(range(-self.codim_rank, 0)) + tuple(range(self.dim_rank))
+        B = A.transpose(axes)  # (*codim_shape, *dim_shape)
+        return B
 
     def gram(self) -> pxt.OpT:
         r"""
-        Gram operator :math:`\mathbf{A}^{\ast} \mathbf{A}: \mathbb{R}^{M} \to \mathbb{R}^{M}`.
+        Gram operator :math:`\mathbf{A}^{\ast} \mathbf{A}: \mathbb{R}^{M_{1} \times\cdots\times M_{D}} \to
+        \mathbb{R}^{M_{1} \times\cdots\times M_{D}}`.
 
         Returns
         -------
         op: OpT
-            (M, M) Gram operator.
+            Gram operator.
 
         Note
         ----
@@ -1612,16 +1698,17 @@ class LinOp(DiffMap):
 
         op = self.T * self
         op._expr = types.MethodType(op_expr, op)
-        return op.asop(SelfAdjointOp).squeeze()
+        return op.asop(SelfAdjointOp)
 
     def cogram(self) -> pxt.OpT:
         r"""
-        Co-Gram operator :math:`\mathbf{A}\mathbf{A}^{\ast}:\mathbb{R}^{N} \to \mathbb{R}^{N}`.
+        Co-Gram operator :math:`\mathbf{A}\mathbf{A}^{\ast}:\mathbb{R}^{N_{1} \times\cdots\times N_{K}} \to
+        \mathbb{R}^{N_{1} \times\cdots\times N_{K}}`.
 
         Returns
         -------
         op: OpT
-            (N, N) Co-Gram operator.
+            Co-Gram operator.
 
         Note
         ----
@@ -1635,7 +1722,7 @@ class LinOp(DiffMap):
 
         op = self * self.T
         op._expr = types.MethodType(op_expr, op)
-        return op.asop(SelfAdjointOp).squeeze()
+        return op.asop(SelfAdjointOp)
 
     @pxrt.enforce_precision(i=("arr", "damp"))
     def pinv(
@@ -1651,7 +1738,7 @@ class LinOp(DiffMap):
         Parameters
         ----------
         arr: NDArray
-            (..., N) input points.
+            (..., N1,...,NK) input points.
         damp: Real
             Positive dampening factor regularizing the pseudo-inverse.
         kwargs_init: ~collections.abc.Mapping
@@ -1662,13 +1749,14 @@ class LinOp(DiffMap):
         Returns
         -------
         out: NDArray
-            (..., M) pseudo-inverse(s).
+            (..., M1,...,MD) pseudo-inverse(s).
 
         Notes
         -----
-        The Moore-Penrose pseudo-inverse of an operator :math:`\mathbf{A}: \mathbb{R}^{M} \to \mathbb{R}^{N}` is defined
-        as the operator :math:`\mathbf{A}^{\dagger}: \mathbb{R}^{N} \to \mathbb{R}^{M}` verifying the Moore-Penrose
-        conditions:
+        The Moore-Penrose pseudo-inverse of an operator :math:`\mathbf{A}: \mathbb{R}^{M_{1} \times\cdots\times M_{D}}
+        \to \mathbb{R}^{N_{1} \times\cdots\times N_{K}}` is defined as the operator :math:`\mathbf{A}^{\dagger}:
+        \mathbb{R}^{N_{1} \times\cdots\times N_{K}} \to \mathbb{R}^{M_{1} \times\cdots\times M_{D}}` verifying the
+        Moore-Penrose conditions:
 
             1. :math:`\mathbf{A} \mathbf{A}^{\dagger} \mathbf{A} = \mathbf{A}`,
             2. :math:`\mathbf{A}^{\dagger} \mathbf{A} \mathbf{A}^{\dagger} = \mathbf{A}^{\dagger}`,
@@ -1676,8 +1764,8 @@ class LinOp(DiffMap):
             4. :math:`(\mathbf{A} \mathbf{A}^{\dagger})^{\ast} = \mathbf{A} \mathbf{A}^{\dagger}`.
 
         This operator exists and is unique for any finite-dimensional linear operator.  The action of the pseudo-inverse
-        :math:`\mathbf{A}^{\dagger} \mathbf{y}` for every :math:`\mathbf{y} \in \mathbb{R}^{N}` can be computed in
-        matrix-free fashion by solving the *normal equations*:
+        :math:`\mathbf{A}^{\dagger} \mathbf{y}` for every :math:`\mathbf{y} \in \mathbb{R}^{N_{1} \times\cdots\times
+        N_{K}}` can be computed in matrix-free fashion by solving the *normal equations*:
 
         .. math::
 
@@ -1685,7 +1773,8 @@ class LinOp(DiffMap):
            \quad\Leftrightarrow\quad
            \mathbf{x} = \mathbf{A}^{\dagger} \mathbf{y},
            \quad
-           \forall (\mathbf{x}, \mathbf{y}) \in \mathbb{R}^{M} \times \mathbb{R}^{N}.
+           \forall (\mathbf{x}, \mathbf{y}) \in \mathbb{R}^{M_{1} \times\cdots\times M_{D}} \times \mathbb{R}^{N_{1}
+           \times\cdots\times N_{K}}.
 
         In the case of severe ill-conditioning, it is possible to consider the dampened normal equations for a
         numerically-stabler approximation of :math:`\mathbf{A}^{\dagger} \mathbf{y}`:
@@ -1707,13 +1796,13 @@ class LinOp(DiffMap):
         if np.isclose(damp, 0):
             A = self.gram()
         else:
-            A = self.gram() + HomothetyOp(cst=damp, dim=self.dim)
+            A = self.gram() + HomothetyOp(cst=damp, dim_shape=self.dim_shape)
 
         cg = CG(A, **kwargs_init)
         if "stop_crit" not in kwargs_fit:
             # .pinv() may not have sufficiently converged given the default CG stopping criteria.
             # To avoid infinite loops, CG iterations are thresholded.
-            sentinel = MaxIter(n=20 * A.dim)
+            sentinel = MaxIter(n=20 * A.dim_size)
             kwargs_fit["stop_crit"] = cg.default_stop_crit() | sentinel
 
         b = self.adjoint(arr)
@@ -1741,7 +1830,7 @@ class LinOp(DiffMap):
         Returns
         -------
         op: OpT
-            (M, N) Moore-Penrose pseudo-inverse operator.
+            Moore-Penrose pseudo-inverse operator.
         """
         from pyxu.operator.interop import from_source
 
@@ -1765,8 +1854,9 @@ class LinOp(DiffMap):
         kwargs_init = dict() if kwargs_init is None else kwargs_init
 
         dagger = from_source(
-            cls=SquareOp if (self.dim == self.codim) else LinOp,
-            shape=(self.dim, self.codim),
+            cls=SquareOp if (self.dim_size == self.codim_size) else LinOp,
+            dim_shape=self.codim_shape,
+            codim_shape=self.dim_shape,
             embed=dict(
                 _name="dagger",
                 _damp=damp,
@@ -1783,6 +1873,7 @@ class LinOp(DiffMap):
     def from_array(
         cls,
         A: typ.Union[pxt.NDArray, pxt.SparseArray],
+        dim_rank=None,
         enable_warnings: bool = True,
     ) -> pxt.OpT:
         r"""
@@ -1791,24 +1882,32 @@ class LinOp(DiffMap):
         Parameters
         ----------
         A: NDArray
-            (N, M) array
+            (*codim_shape, *dim_shape) array.
+        dim_rank: Integer
+            Dimension rank :math:`D`. (Can be omitted if `A` is 2D.)
         enable_warnings: bool
             If ``True``, emit a warning in case of precision mis-match issues.
 
         Returns
         -------
         op: OpT
-            (N, M) linear operator
+            Linear operator
         """
         from pyxu.operator.linop.base import _ExplicitLinOp
 
-        return _ExplicitLinOp(cls, A, enable_warnings)
+        op = _ExplicitLinOp(
+            cls,
+            mat=A,
+            dim_rank=dim_rank,
+            enable_warnings=enable_warnings,
+        )
+        return op
 
 
 class SquareOp(LinOp):
     r"""
-    Base class for *square* linear operators, i.e. :math:`\mathbf{A}: \mathbb{R}^{M} \to \mathbb{R}^{M}`
-    (endomorphsisms).
+    Base class for *square* linear operators, i.e. :math:`\mathbf{A}: \mathbb{R}^{M_{1} \times\cdots\times M_{D}} \to
+    \mathbb{R}^{M_{1} \times\cdots\times M_{D}}` (endomorphsisms).
     """
 
     @classmethod
@@ -1817,9 +1916,16 @@ class SquareOp(LinOp):
         p.add(Property.LINEAR_SQUARE)
         return frozenset(p)
 
-    def __init__(self, shape: pxt.OpShape):
-        super().__init__(shape=shape)
-        assert self.dim == self.codim, f"shape: expected (M, M), got {self.shape}."
+    def __init__(
+        self,
+        dim_shape: pxt.NDArrayShape,
+        codim_shape: pxt.NDArrayShape,
+    ):
+        super().__init__(
+            dim_shape=dim_shape,
+            codim_shape=codim_shape,
+        )
+        assert self.dim_size == self.codim_size
 
     @pxrt.enforce_precision()
     def trace(self, **kwargs) -> pxt.Real:
@@ -1831,7 +1937,7 @@ class SquareOp(LinOp):
         method: "explicit" | "hutchpp"
 
             * If `explicit`, compute the exact trace.
-            * If `hutchpp`, compute an approximation.
+            * If `hutchpp`, compute an approximation. (Default)
 
         kwargs: ~collections.abc.Mapping
             Optional kwargs passed to:
@@ -1914,8 +2020,15 @@ class UnitOp(NormalOp):
         p.add(Property.LINEAR_UNITARY)
         return frozenset(p)
 
-    def __init__(self, shape: pxt.OpShape):
-        super().__init__(shape=shape)
+    def __init__(
+        self,
+        dim_shape: pxt.NDArrayShape,
+        codim_shape: pxt.NDArrayShape,
+    ):
+        super().__init__(
+            dim_shape=dim_shape,
+            codim_shape=codim_shape,
+        )
         self.lipschitz = UnitOp.estimate_lipschitz(self)
 
     def estimate_lipschitz(self, **kwargs) -> pxt.Real:
@@ -1936,7 +2049,7 @@ class UnitOp(NormalOp):
     def gram(self) -> pxt.OpT:
         from pyxu.operator import IdentityOp
 
-        return IdentityOp(dim=self.dim).squeeze()
+        return IdentityOp(dim_shape=self.dim_shape)
 
     def svdvals(self, **kwargs) -> pxt.NDArray:
         gpu = kwargs.get("gpu", False)
@@ -1976,18 +2089,25 @@ class OrthProjOp(ProjOp, SelfAdjointOp):
             p |= klass.properties()
         return frozenset(p)
 
-    def __init__(self, shape: pxt.OpShape):
-        super().__init__(shape=shape)
+    def __init__(
+        self,
+        dim_shape: pxt.NDArrayShape,
+        codim_shape: pxt.NDArrayShape,
+    ):
+        super().__init__(
+            dim_shape=dim_shape,
+            codim_shape=codim_shape,
+        )
         self.lipschitz = OrthProjOp.estimate_lipschitz(self)
 
     def estimate_lipschitz(self, **kwargs) -> pxt.Real:
         return 1
 
     def gram(self) -> pxt.OpT:
-        return self.squeeze()
+        return self
 
     def cogram(self) -> pxt.OpT:
-        return self.squeeze()
+        return self
 
     @pxrt.enforce_precision(i=("arr", "damp"))
     def pinv(self, arr: pxt.NDArray, damp: pxt.Real, **kwargs) -> pxt.NDArray:
@@ -2016,7 +2136,7 @@ class PosDefOp(SelfAdjointOp):
 
 class LinFunc(ProxDiffFunc, LinOp):
     r"""
-    Base class for real-valued linear functionals :math:`f: \mathbb{R}^{M} \to \mathbb{R}`.
+    Base class for real-valued linear functionals :math:`f: \mathbb{R}^{M_{1} \times\cdots\times M_{D}} \to \mathbb{R}`.
 
     Instances of this class must implement :py:meth:`~pyxu.abc.Map.apply`, and :py:meth:`~pyxu.abc.LinOp.adjoint`.
 
@@ -2030,10 +2150,17 @@ class LinFunc(ProxDiffFunc, LinOp):
             p |= klass.properties()
         return frozenset(p)
 
-    def __init__(self, shape: pxt.OpShape):
-        super().__init__(shape=shape)
-        ProxDiffFunc.__init__(self, shape)
-        LinOp.__init__(self, shape)
+    def __init__(
+        self,
+        dim_shape: pxt.NDArrayShape,
+        codim_shape: pxt.NDArrayShape,
+    ):
+        for klass in [ProxDiffFunc, LinOp]:
+            klass.__init__(
+                self,
+                dim_shape=dim_shape,
+                codim_shape=codim_shape,
+            )
 
     def jacobian(self, arr: pxt.NDArray) -> pxt.OpT:
         return LinOp.jacobian(self, arr)
@@ -2043,25 +2170,33 @@ class LinFunc(ProxDiffFunc, LinOp):
         for ndi in pxd.NDArrayInfo:
             try:
                 xp = ndi.module()
-                g = self.grad(xp.ones(self.dim))
-                L = float(xp.linalg.norm(g))
+                g = self.grad(xp.ones(self.dim_shape))
+                L = float(xp.sqrt(xp.sum(g**2)))
                 return L
             except Exception:
                 pass
 
     @pxrt.enforce_precision(i="arr")
     def grad(self, arr: pxt.NDArray) -> pxt.NDArray:
-        xp = pxu.get_array_module(arr)
-        x = xp.ones((*arr.shape[:-1], 1), dtype=arr.dtype)
+        ndi = pxd.NDArrayInfo.from_obj(arr)
+        xp = ndi.module()
+
+        sh = arr.shape[: -self.dim_rank]
+        x = xp.ones((*sh, 1), dtype=arr.dtype)
         g = self.adjoint(x)
+
+        if ndi == pxd.NDArrayInfo.DASK:
+            # LinFuncs auto-determine [grad,prox,fenchel_prox]() via the user-specified adjoint().
+            # Problem: cannot forward any core-chunk info to adjoint(), hence grad's core-chunks
+            # may differ from `arr`. This is problematic since [grad,prox,fenchel_prox]() should
+            # preserve core-chunks by default.
+            if g.chunks != arr.chunks:
+                g = g.rechunk(arr.chunks)
         return g
 
     @pxrt.enforce_precision(i=("arr", "tau"))
     def prox(self, arr: pxt.NDArray, tau: pxt.Real) -> pxt.NDArray:
-        # out = arr - tau * self.grad(arr)
-        out = pxu.copy_if_unsafe(self.grad(arr))
-        out *= -tau
-        out += arr
+        out = arr - tau * self.grad(arr)
         return out
 
     @pxrt.enforce_precision(i=("arr", "sigma"))
@@ -2072,7 +2207,7 @@ class LinFunc(ProxDiffFunc, LinOp):
         from pyxu.operator import HomothetyOp
 
         L = self.estimate_lipschitz()
-        return HomothetyOp(cst=L**2, dim=1)
+        return HomothetyOp(cst=L**2, dim_shape=1)
 
     def svdvals(self, **kwargs) -> pxt.NDArray:
         gpu = kwargs.get("gpu", False)
@@ -2087,21 +2222,10 @@ class LinFunc(ProxDiffFunc, LinOp):
         xp = kwargs.get("xp", pxd.NDArrayInfo.default().module())
         dtype = kwargs.get("dtype", pxrt.getPrecision().value)
 
+        E = xp.ones((1, 1), dtype=dtype)
         with pxrt.EnforcePrecision(False):
-            x = xp.ones((1, 1), dtype=dtype)
-            A = self.adjoint(x)
+            A = self.adjoint(E)  # (1, *dim_shape)
         return A
-
-    @classmethod
-    def from_array(
-        cls,
-        A: typ.Union[pxt.NDArray, pxt.SparseArray],
-        enable_warnings: bool = True,
-    ) -> pxt.OpT:
-        if A.ndim == 1:
-            A = A.reshape((1, -1))
-        op = super().from_array(A, enable_warnings)
-        return op
 
 
 def _core_operators() -> cabc.Set[pxt.OpC]:
