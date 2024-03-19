@@ -185,53 +185,53 @@ def threshold_processing_2(image):
 
 
 if __name__ == "__main__":
-    lcav_low_img = lcav_low.run()
-    # lcav_middle1_img = lcav_middle1.run()
-    # lcav_middle2_img = lcav_middle2.run()
-    lcav_high_img = lcav_high.run()
-
-    plot_four_images(
-        [bunny_low(), lcav_low_img, bunny_high(), lcav_high_img],
-        ["GT low", "Low", "GT high", "High"],
-        "No thresholding",
-        "no_thresholding_part1.png",
-    )
-
-    plot_four_images(
-        [bunny_low(), lcav_low_img, bunny_high(), lcav_high_img],
-        ["GT low", "Low", "GT high", "High"],
-        "With thresholding - 2 colors",
-        "with_thresholding_2_colors_part1.png",
-        processing=[lambda x: x, threshold_processing_1, lambda x: x, threshold_processing_1],
-    )
-
-    plot_four_images(
-        [bunny_low(), lcav_low_img, bunny_high(), lcav_high_img],
-        ["GT low", "Low", "GT high", "High"],
-        "With thresholding - 3 colors",
-        "with_thresholding_3_colors_part1.png",
-        processing=[lambda x: x, threshold_processing_2, lambda x: x, threshold_processing_2],
-    )
+    # lcav_low_img = lcav_low.run()
+    lcav_middle1_img = lcav_middle1.run()
+    lcav_middle2_img = lcav_middle2.run()
+    # lcav_high_img = lcav_high.run()
 
     # plot_four_images(
-    #     [bunny_middle1(), lcav_middle1_img, bunny_middle2(), lcav_middle2_img],
-    #     ["GT mid 1", "Mid 1", "GT mid 2", "Mid 2"],
+    #     [bunny_low(), lcav_low_img, bunny_high(), lcav_high_img],
+    #     ["GT low", "Low", "GT high", "High"],
     #     "No thresholding",
-    #     "no_thresholding_part2.png",
+    #     "no_thresholding_part1.png",
     # )
     #
     # plot_four_images(
-    #     [bunny_middle1(), lcav_middle1_img, bunny_middle2(), lcav_middle2_img],
-    #     ["GT mid 1", "Mid 1", "GT mid 2", "Mid 2"],
+    #     [bunny_low(), lcav_low_img, bunny_high(), lcav_high_img],
+    #     ["GT low", "Low", "GT high", "High"],
     #     "With thresholding - 2 colors",
-    #     "with_thresholding_2_colors_part2.png",
+    #     "with_thresholding_2_colors_part1.png",
     #     processing=[lambda x: x, threshold_processing_1, lambda x: x, threshold_processing_1],
     # )
     #
     # plot_four_images(
-    #     [bunny_middle1(), lcav_middle1_img, bunny_middle2(), lcav_middle2_img],
-    #     ["GT mid 1", "Mid 1", "GT mid 2", "Mid 2"],
+    #     [bunny_low(), lcav_low_img, bunny_high(), lcav_high_img],
+    #     ["GT low", "Low", "GT high", "High"],
     #     "With thresholding - 3 colors",
-    #     "with_thresholding_3_colors_part2.png",
+    #     "with_thresholding_3_colors_part1.png",
     #     processing=[lambda x: x, threshold_processing_2, lambda x: x, threshold_processing_2],
     # )
+
+    plot_four_images(
+        [bunny_middle1(), lcav_middle1_img, bunny_middle2(), lcav_middle2_img],
+        ["GT mid 1", "Mid 1", "GT mid 2", "Mid 2"],
+        "No thresholding",
+        "no_thresholding_part2.png",
+    )
+
+    plot_four_images(
+        [bunny_middle1(), lcav_middle1_img, bunny_middle2(), lcav_middle2_img],
+        ["GT mid 1", "Mid 1", "GT mid 2", "Mid 2"],
+        "With thresholding - 2 colors",
+        "with_thresholding_2_colors_part2.png",
+        processing=[lambda x: x, threshold_processing_1, lambda x: x, threshold_processing_1],
+    )
+
+    plot_four_images(
+        [bunny_middle1(), lcav_middle1_img, bunny_middle2(), lcav_middle2_img],
+        ["GT mid 1", "Mid 1", "GT mid 2", "Mid 2"],
+        "With thresholding - 3 colors",
+        "with_thresholding_3_colors_part2.png",
+        processing=[lambda x: x, threshold_processing_2, lambda x: x, threshold_processing_2],
+    )
