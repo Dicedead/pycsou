@@ -1,3 +1,4 @@
+import warnings
 from dataclasses import dataclass
 
 import imageio.v3 as iio
@@ -7,52 +8,47 @@ import skimage
 
 import pyxu.abc as pxa
 import pyxu.info.ptype as pxt
-import pyxu.operator.linop.base as pxlb
 import pyxu.operator.linop.xrt.ray as xray
-import pyxu.runtime as pxrt
-import pyxu.util as pxu
-from pyxu.abc import DiffMap, ProxFunc
-from pyxu.operator import PositiveOrthant, SquaredL2Norm
+from pyxu.abc import ProxFunc
+from pyxu.operator import DiagonalOp, PositiveOrthant, SquaredL2Norm
 from pyxu.opt.solver import PGD
-from pyxu.opt.stop import RelError
+from pyxu.opt.stop import MaxIter, RelError
+
+warnings.filterwarnings("ignore")
+
+num_n = 1000
+num_t = 350
+lambda_ = 0.004
+b_param = 10
+diff_lip = 400000 * b_param / 2
 
 
-class SigLU(pxa.DiffMap):
-    def __init__(self, dim: pxt.Integer):
-        super().__init__(dim_shape=(dim,), codim_shape=(dim,))
-        self.lipschitz = 1 / 4
-        self.diff_lipschitz = 1 / (6 * np.sqrt(3))
+class BhattInspiredLoss(pxa.DiffFunc):
+    def __init__(self, xrt: xray.RayXRT, gt: pxt.NDArray, b: pxt.Real):
+        super().__init__(dim_shape=xrt.codim_shape, codim_shape=(1,))
+        fg_constant = DiagonalOp(gt)
+        bg_constant = DiagonalOp(1 - gt)
 
-    @pxrt.enforce_precision(i="arr")
-    def apply(self, arr: pxt.NDArray) -> pxt.NDArray:
-        xp = pxu.get_array_module(arr)
-        x = -arr
-        xp.exp(x, out=x)
-        x += 1
-        x = 1 / x
-        x[arr < 0] = 0.25 * arr[arr < 0] + 0.5
-        return x
+        self._loss_fg = SquaredL2Norm(dim_shape=xrt.dim_shape).argshift(-gt) * (fg_constant * xrt.T)
+        self._loss_bg = b * SquaredL2Norm(dim_shape=xrt.dim_shape).argshift(-gt) * (bg_constant * xrt.T)
 
-    @pxrt.enforce_precision(i="arr", o=False)
-    def jacobian(self, arr: pxt.NDArray) -> pxt.OpT:
-        x = self.apply(arr)
-        v = x.copy()
-        x -= 1
-        v *= x
-        v[arr < 0] = 0.25
-        return pxlb.DiagonalOp(v)
+    def apply(self, arr):
+        return self._loss_fg.apply(arr) + self._loss_bg.apply(arr)
+
+    def grad(self, arr):
+        return self._loss_fg.grad(arr) + self._loss_bg.grad(arr)
 
 
 @dataclass
 class ReconstructionTechnique:
     ground_truth: pxt.NDArray
-    op: DiffMap
+    op: xray.RayXRT
     regularizer: ProxFunc
     initialisation: pxt.NDArray
     diff_lip: float
 
-    def run(self, stop_crit=RelError(eps=1e-3), post_process_optres=None):
-        data_fidelity = SquaredL2Norm(np.prod(self.ground_truth.shape)).argshift(-self.ground_truth.flatten()) * self.op
+    def run(self, stop_crit=RelError(eps=1e-3) | MaxIter(100), post_process_optres=None):
+        data_fidelity = BhattInspiredLoss(self.op, self.ground_truth, b=b_param)
         pgd = PGD(data_fidelity, self.regularizer)
         pgd.fit(x0=self.initialisation, stop_crit=stop_crit, track_objective=True, tau=1 / self.diff_lip)
         alpha, _ = pgd.stats()
@@ -61,47 +57,7 @@ class ReconstructionTechnique:
         if post_process_optres is not None:
             alpha = post_process_optres(alpha)
 
-        return self.op(alpha).reshape(*self.ground_truth.shape)
-
-
-side = 512
-gamma = 0.3
-beta = 15
-num_n = 1000
-num_t = 350
-lambda_ = 4
-diff_lip = 400
-transmittance_ratio = 0.6  # I_center = trans_ratio * I_0
-
-
-def disk(side=side, radius=side / 4):
-    x, y = np.meshgrid(np.linspace(-side / 2, side / 2, side), np.linspace(-side / 2, side / 2, side))
-    ground_truth = 1 * (x**2 + y**2 <= (radius**2))
-    return ground_truth
-
-
-def ellipsis(side_a, num_a, side_b, num_b):
-    side_a = side_a / 2
-    side_b = side_b / 2
-    x, y = np.meshgrid(np.linspace(-side_a, side_a, num_a), np.linspace(-side_b, side_b, num_b))
-    ground_truth = 1 * ((x / side_a) ** 2 + (y / side_b) ** 2 <= 1)
-    return ground_truth
-
-
-def absorption_coeff(sides, ratio=transmittance_ratio):
-    sides = pitch * sides
-    return -np.log(ratio) * np.sum(sides) / (2 * np.prod(sides))
-
-
-def inverse_absorption_map(sides, ratio=transmittance_ratio):
-    sides = pitch * sides
-    alpha = absorption_coeff(sides, ratio)
-    distance_max = sides[0] / 2
-    points = np.indices(sides.astype(int)).transpose((1, 2, 0)) * pitch
-    dist = np.linalg.norm(points - distance_max, axis=-1)
-    distances = distance_max - dist
-    correction_map = np.exp(alpha * distances)
-    return correction_map
+        return self.op.adjoint(alpha)
 
 
 def bunny_high():
@@ -120,12 +76,11 @@ def bunny_low():
     return 1 * iio.imread("../../3dtests/pngs/bunny_zres_100_reweighted__009.png")
 
 
-ground_truth = bunny_high()  # chirp_signal([side, side], a=20)  # epfl_logo(inverted=True)
+ground_truth = bunny_high()
 
 side = np.array(ground_truth.shape)
-origin = 0
-pitch = np.array([1.0, 1.0])
-w_spec = absorption_coeff(side) * ellipsis(pitch[1] * side[1], side[1], pitch[0] * side[0], side[0])
+origin = 0.0
+pitch = 1.0
 
 angle = np.linspace(0, 2 * np.pi, num_n, endpoint=False)
 t_max = pitch * side / 2  # 10% over ball radius
@@ -134,60 +89,55 @@ t_offset = np.linspace(-t_max[0], t_max[1], num_t, endpoint=True)
 n = np.stack([np.cos(angle), np.sin(angle)], axis=1)
 t = n[:, [1, 0]] * np.r_[-1, 1]  # <n, t> = 0
 
-n_spec = np.broadcast_to(n.reshape(num_n, 1, 2), (num_n, num_t, 2))  # (N_angle, N_offset, 2)
+n_spec = np.broadcast_to(n.reshape(num_n, 1, 2), (num_n, num_t, 2))
 t_spec = t.reshape(num_n, 1, 2) * t_offset.reshape(num_t, 1)
 t_spec += pitch * side / 2
 
-weighted_xrt = xray.XRayTransform.init(
-    arg_shape=ground_truth.shape,
+weighted_xrt = xray.RayXRT(
+    dim_shape=ground_truth.shape,
     origin=origin,
     pitch=pitch,
-    method="ray-trace",
     n_spec=n_spec.reshape(-1, 2),
     t_spec=t_spec.reshape(-1, 2),
-    w_spec=w_spec,
 )
 
-unweighted_xrt = xray.XRayTransform.init(
-    arg_shape=ground_truth.shape,
+unweighted_xrt = xray.RayXRT(
+    dim_shape=ground_truth.shape,
     origin=origin,
     pitch=pitch,
-    method="ray-trace",
     n_spec=n_spec.reshape(-1, 2),
     t_spec=t_spec.reshape(-1, 2),
-    w_spec=None,
 )
-
 
 lcav_low = ReconstructionTechnique(
     ground_truth=bunny_low(),
-    op=weighted_xrt.T,
-    regularizer=PositiveOrthant(weighted_xrt.codim),
-    initialisation=0 * np.random.randn(weighted_xrt.codim),
+    op=unweighted_xrt,
+    regularizer=lambda_ * PositiveOrthant(weighted_xrt.codim_shape),
+    initialisation=np.zeros(weighted_xrt.codim_shape),
     diff_lip=diff_lip,
 )
 
 lcav_high = ReconstructionTechnique(
     ground_truth=bunny_high(),
-    op=weighted_xrt.T,
-    regularizer=PositiveOrthant(weighted_xrt.codim),
-    initialisation=0 * np.random.randn(weighted_xrt.codim),
+    op=unweighted_xrt,
+    regularizer=lambda_ * PositiveOrthant(weighted_xrt.codim_shape),
+    initialisation=np.zeros(weighted_xrt.codim_shape),
     diff_lip=diff_lip,
 )
 
 lcav_middle1 = ReconstructionTechnique(
     ground_truth=bunny_middle1(),
-    op=weighted_xrt.T,
-    regularizer=PositiveOrthant(weighted_xrt.codim),
-    initialisation=0 * np.random.randn(weighted_xrt.codim),
+    op=unweighted_xrt,
+    regularizer=lambda_ * PositiveOrthant(weighted_xrt.codim_shape),
+    initialisation=np.zeros(weighted_xrt.codim_shape),
     diff_lip=diff_lip,
 )
 
 lcav_middle2 = ReconstructionTechnique(
     ground_truth=bunny_middle2(),
-    op=weighted_xrt.T,
-    regularizer=PositiveOrthant(weighted_xrt.codim),
-    initialisation=0 * np.random.randn(weighted_xrt.codim),
+    op=unweighted_xrt,
+    regularizer=lambda_ * PositiveOrthant(weighted_xrt.codim_shape),
+    initialisation=np.zeros(weighted_xrt.codim_shape),
     diff_lip=diff_lip,
 )
 

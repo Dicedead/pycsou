@@ -1,3 +1,4 @@
+import warnings
 from dataclasses import dataclass
 
 import imageio.v3 as iio
@@ -12,11 +13,13 @@ from pyxu.operator import DiagonalOp, PositiveOrthant
 from pyxu.opt.solver import PGD
 from pyxu.opt.stop import MaxIter, RelError
 
+warnings.filterwarnings("ignore")
+
 dh = 0.9
 dl = 0.5
 num_n = 1000
 num_t = 350
-lambda_ = 0.004
+lambda_ = 4
 
 
 class BhattLoss(pxa.DiffFunc):
@@ -31,12 +34,14 @@ class BhattLoss(pxa.DiffFunc):
         bg_posort = PositiveOrthant(dim_shape=xrt.dim_shape).argshift(bg_argshift).argscale(-1).moreau_envelope(mu)
         self._loss_fg = fg_posort * (fg_constant * xrt.T)
         self._loss_bg = bg_posort * (bg_constant * xrt.T)
+        self._reg = lambda_ * PositiveOrthant(weighted_xrt.codim_shape).moreau_envelope(mu)
 
     def apply(self, arr):
-        return self._loss_fg.apply(arr) + self._loss_bg.apply(arr)
+        return self._loss_fg.apply(arr) + self._loss_bg.apply(arr) + self._reg(arr)
+        # TODO naive implem because XRT.adj is applied twice => can be optimized if needed
 
     def grad(self, arr):
-        return self._loss_fg.grad(arr) + self._loss_bg.grad(arr)
+        return self._loss_fg.grad(arr) + self._loss_bg.grad(arr) + self._reg.grad(arr)
 
 
 @dataclass
@@ -48,8 +53,8 @@ class ReconstructionTechnique:
     diff_lip: float
 
     def run(self, stop_crit=RelError(eps=1e-3) | MaxIter(200), post_process_optres=None):
-        data_fidelity = BhattLoss(self.op, self.ground_truth, mu=30)
-        pgd = PGD(data_fidelity, self.regularizer)
+        data_fidelity = BhattLoss(self.op, self.ground_truth, mu=10)
+        pgd = PGD(data_fidelity)  # , self.regularizer)
         pgd.fit(x0=self.initialisation, stop_crit=stop_crit, track_objective=True, tau=1 / self.diff_lip)
         alpha, _ = pgd.stats()
         alpha = alpha["x"]
@@ -57,6 +62,9 @@ class ReconstructionTechnique:
         if post_process_optres is not None:
             alpha = post_process_optres(alpha)
 
+        tmp = len(alpha[alpha > 0]) / len(alpha)
+        print(tmp)
+        alpha = alpha.clip(0, None)
         return self.op.adjoint(alpha)
 
 
@@ -178,8 +186,8 @@ def threshold_processing_2(image):
 
 if __name__ == "__main__":
     lcav_low_img = lcav_low.run()
-    lcav_middle1_img = lcav_middle1.run()
-    lcav_middle2_img = lcav_middle2.run()
+    # lcav_middle1_img = lcav_middle1.run()
+    # lcav_middle2_img = lcav_middle2.run()
     lcav_high_img = lcav_high.run()
 
     plot_four_images(
@@ -205,25 +213,25 @@ if __name__ == "__main__":
         processing=[lambda x: x, threshold_processing_2, lambda x: x, threshold_processing_2],
     )
 
-    plot_four_images(
-        [bunny_middle1(), lcav_middle1_img, bunny_middle2(), lcav_middle2_img],
-        ["GT mid 1", "Mid 1", "GT mid 2", "Mid 2"],
-        "No thresholding",
-        "no_thresholding_part2.png",
-    )
-
-    plot_four_images(
-        [bunny_middle1(), lcav_middle1_img, bunny_middle2(), lcav_middle2_img],
-        ["GT mid 1", "Mid 1", "GT mid 2", "Mid 2"],
-        "With thresholding - 2 colors",
-        "with_thresholding_2_colors_part2.png",
-        processing=[lambda x: x, threshold_processing_1, lambda x: x, threshold_processing_1],
-    )
-
-    plot_four_images(
-        [bunny_middle1(), lcav_middle1_img, bunny_middle2(), lcav_middle2_img],
-        ["GT mid 1", "Mid 1", "GT mid 2", "Mid 2"],
-        "With thresholding - 3 colors",
-        "with_thresholding_3_colors_part2.png",
-        processing=[lambda x: x, threshold_processing_2, lambda x: x, threshold_processing_2],
-    )
+    # plot_four_images(
+    #     [bunny_middle1(), lcav_middle1_img, bunny_middle2(), lcav_middle2_img],
+    #     ["GT mid 1", "Mid 1", "GT mid 2", "Mid 2"],
+    #     "No thresholding",
+    #     "no_thresholding_part2.png",
+    # )
+    #
+    # plot_four_images(
+    #     [bunny_middle1(), lcav_middle1_img, bunny_middle2(), lcav_middle2_img],
+    #     ["GT mid 1", "Mid 1", "GT mid 2", "Mid 2"],
+    #     "With thresholding - 2 colors",
+    #     "with_thresholding_2_colors_part2.png",
+    #     processing=[lambda x: x, threshold_processing_1, lambda x: x, threshold_processing_1],
+    # )
+    #
+    # plot_four_images(
+    #     [bunny_middle1(), lcav_middle1_img, bunny_middle2(), lcav_middle2_img],
+    #     ["GT mid 1", "Mid 1", "GT mid 2", "Mid 2"],
+    #     "With thresholding - 3 colors",
+    #     "with_thresholding_3_colors_part2.png",
+    #     processing=[lambda x: x, threshold_processing_2, lambda x: x, threshold_processing_2],
+    # )
