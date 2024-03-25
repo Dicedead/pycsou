@@ -1,4 +1,3 @@
-import sys
 import warnings
 from dataclasses import dataclass
 
@@ -10,8 +9,6 @@ import pyxu.abc as pxa
 import pyxu.info.ptype as pxt
 from pyxu.abc import ProxFunc
 from pyxu.operator import DiagonalOp, PositiveOrthant
-
-print(sys.path)
 from pyxu.operator.linop.xrt.ray import RayXRT
 from pyxu.opt.solver import PGD
 from pyxu.opt.stop import MaxIter, RelError
@@ -65,18 +62,12 @@ class ReconstructionTechnique:
 
     def run(self, stop_crit=RelError(eps=1e-3) | MaxIter(200), post_process_optres=None, mu1=10, mu2=10):
         alpha = self.__run_epoch(self.initialisation, mu1=mu1, mu2=mu2, stop_crit=RelError(eps=1e-3) | MaxIter(200))
-
         alpha = self.__run_epoch(alpha, mu1=mu1 / 2, mu2=mu2, stop_crit=RelError(eps=1e-3) | MaxIter(200))
-
         alpha = self.__run_epoch(alpha, mu1=mu1 / 2, mu2=mu2 / 2, stop_crit=RelError(eps=1e-3) | MaxIter(200))
-
         alpha = self.__run_epoch(alpha, mu1=mu1 / 4, mu2=mu2 / 2, stop_crit=RelError(eps=1e-4) | MaxIter(200))
-
         alpha = self.__run_epoch(alpha, mu1=mu1 / 4, mu2=mu2 / 4, stop_crit=RelError(eps=1e-4) | MaxIter(200))
-
-        alpha = self.__run_epoch(alpha, mu1=mu1 / 8, mu2=mu2 / 4, stop_crit=RelError(eps=1e-4) | MaxIter(200))
-
-        alpha = self.__run_epoch(alpha, mu1=mu1 / 8, mu2=mu2 / 8, stop_crit=RelError(eps=1e-4) | MaxIter(200))
+        alpha = self.__run_epoch(alpha, mu1=mu1 / 8, mu2=mu2 / 4, stop_crit=RelError(eps=5e-6) | MaxIter(200))
+        alpha = self.__run_epoch(alpha, mu1=mu1 / 8, mu2=mu2 / 8, stop_crit=RelError(eps=5e-6) | MaxIter(200))
 
         if post_process_optres is not None:
             alpha = post_process_optres(alpha)
@@ -210,34 +201,9 @@ def threshold_processing_2(image):
     return res
 
 
-if __name__ == "__main__":
-    # lcav_low_img = lcav_low.run()
+def run_both_middle():
     lcav_middle1_img = lcav_middle1.run()
     lcav_middle2_img = lcav_middle2.run()
-    # lcav_high_img = lcav_high.run()
-
-    # plot_four_images(
-    #     [bunny_low(), lcav_low_img, bunny_high(), lcav_high_img],
-    #     ["GT low", "Low", "GT high", "High"],
-    #     "No thresholding",
-    #     "no_thresholding_part1.png",
-    # )
-    #
-    # plot_four_images(
-    #     [bunny_low(), lcav_low_img, bunny_high(), lcav_high_img],
-    #     ["GT low", "Low", "GT high", "High"],
-    #     "With thresholding - 2 colors",
-    #     "with_thresholding_2_colors_part1.png",
-    #     processing=[lambda x: x, threshold_processing_1, lambda x: x, threshold_processing_1],
-    # )
-    #
-    # plot_four_images(
-    #     [bunny_low(), lcav_low_img, bunny_high(), lcav_high_img],
-    #     ["GT low", "Low", "GT high", "High"],
-    #     "With thresholding - 3 colors",
-    #     "with_thresholding_3_colors_part1.png",
-    #     processing=[lambda x: x, threshold_processing_2, lambda x: x, threshold_processing_2],
-    # )
 
     plot_four_images(
         [bunny_middle1(), lcav_middle1_img, bunny_middle2(), lcav_middle2_img],
@@ -261,3 +227,35 @@ if __name__ == "__main__":
         "with_thresholding_3_colors_part2.png",
         processing=[lambda x: x, threshold_processing_2, lambda x: x, threshold_processing_2],
     )
+
+
+def run_high_low():
+    lcav_low_img = lcav_low.run()
+    lcav_high_img = lcav_high.run()
+
+    plot_four_images(
+        [bunny_low(), lcav_low_img, bunny_high(), lcav_high_img],
+        ["GT low", "Low", "GT high", "High"],
+        "No thresholding",
+        "no_thresholding_part1.png",
+    )
+
+    plot_four_images(
+        [bunny_low(), lcav_low_img, bunny_high(), lcav_high_img],
+        ["GT low", "Low", "GT high", "High"],
+        "With thresholding - 2 colors",
+        "with_thresholding_2_colors_part1.png",
+        processing=[lambda x: x, threshold_processing_1, lambda x: x, threshold_processing_1],
+    )
+
+    plot_four_images(
+        [bunny_low(), lcav_low_img, bunny_high(), lcav_high_img],
+        ["GT low", "Low", "GT high", "High"],
+        "With thresholding - 3 colors",
+        "with_thresholding_3_colors_part1.png",
+        processing=[lambda x: x, threshold_processing_2, lambda x: x, threshold_processing_2],
+    )
+
+
+if __name__ == "__main__":
+    run_both_middle()
