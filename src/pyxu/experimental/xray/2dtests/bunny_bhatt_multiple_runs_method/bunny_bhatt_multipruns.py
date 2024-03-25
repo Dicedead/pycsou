@@ -1,3 +1,4 @@
+import sys
 import warnings
 from dataclasses import dataclass
 
@@ -9,6 +10,8 @@ import pyxu.abc as pxa
 import pyxu.info.ptype as pxt
 from pyxu.abc import ProxFunc
 from pyxu.operator import DiagonalOp, PositiveOrthant
+
+print(sys.path)
 from pyxu.operator.linop.xrt.ray import RayXRT
 from pyxu.opt.solver import PGD
 from pyxu.opt.stop import MaxIter, RelError
