@@ -260,4 +260,5 @@ def run_high_low():
 
 
 if __name__ == "__main__":
-    run_both_middle()
+    run_high_low()
+    # run_both_middle()
