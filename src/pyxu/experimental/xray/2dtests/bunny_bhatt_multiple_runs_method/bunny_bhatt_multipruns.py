@@ -7,9 +7,9 @@ import numpy as np
 
 import pyxu.abc as pxa
 import pyxu.info.ptype as pxt
-import pyxu.operator.linop.xrt.ray as xray
 from pyxu.abc import ProxFunc
 from pyxu.operator import DiagonalOp, PositiveOrthant
+from pyxu.operator.linop.xrt.ray import RayXRT
 from pyxu.opt.solver import PGD
 from pyxu.opt.stop import MaxIter, RelError
 
@@ -25,7 +25,7 @@ lambda_ = 4
 class BhattLoss(pxa.DiffFunc):
     def __init__(
         self,
-        xrt: xray.RayXRT,
+        xrt: RayXRT,
         ground_truth: pxt.NDArray,
         mu1: pxt.Real,
         mu2: pxt.Real,
@@ -55,7 +55,7 @@ class BhattLoss(pxa.DiffFunc):
 @dataclass
 class ReconstructionTechnique:
     ground_truth: pxt.NDArray
-    op: xray.RayXRT
+    op: RayXRT
     regularizer: ProxFunc
     initialisation: pxt.NDArray
     diff_lip: float
@@ -124,7 +124,7 @@ n_spec = np.broadcast_to(n.reshape(num_n, 1, 2), (num_n, num_t, 2))
 t_spec = t.reshape(num_n, 1, 2) * t_offset.reshape(num_t, 1)
 t_spec += pitch * side / 2
 
-weighted_xrt = xray.RayXRT(
+weighted_xrt = RayXRT(
     dim_shape=ground_truth.shape,
     origin=origin,
     pitch=pitch,
@@ -132,7 +132,7 @@ weighted_xrt = xray.RayXRT(
     t_spec=t_spec.reshape(-1, 2),
 )
 
-unweighted_xrt = xray.RayXRT(
+unweighted_xrt = RayXRT(
     dim_shape=ground_truth.shape,
     origin=origin,
     pitch=pitch,
