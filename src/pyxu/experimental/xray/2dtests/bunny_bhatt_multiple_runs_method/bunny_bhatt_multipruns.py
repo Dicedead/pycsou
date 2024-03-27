@@ -68,8 +68,8 @@ class ReconstructionTechnique:
         alpha = self.__run_epoch(alpha, mu1=mu1 / 4, mu2=mu2 / 4, stop_crit=RelError(eps=1e-5) | MaxIter(200))
         alpha = self.__run_epoch(alpha, mu1=mu1 / 8, mu2=mu2 / 4, stop_crit=RelError(eps=5e-6) | MaxIter(200))
         alpha = self.__run_epoch(alpha, mu1=mu1 / 8, mu2=mu2 / 8, stop_crit=RelError(eps=5e-6) | MaxIter(200))
-        alpha = self.__run_epoch(alpha, mu1=mu1 / 16, mu2=mu2 / 8, stop_crit=RelError(eps=5e-6) | MaxIter(200))
-        alpha = self.__run_epoch(alpha, mu1=mu1 / 16, mu2=mu2 / 16, stop_crit=RelError(eps=5e-6) | MaxIter(200))
+        alpha = self.__run_epoch(alpha, mu1=mu1 / 16, mu2=mu2 / 8, stop_crit=RelError(eps=1e-6) | MaxIter(300))
+        alpha = self.__run_epoch(alpha, mu1=mu1 / 16, mu2=mu2 / 16, stop_crit=RelError(eps=1e-6) | MaxIter(300))
 
         if post_process_optres is not None:
             alpha = post_process_optres(alpha)
@@ -103,9 +103,28 @@ def bunny_low():
     return 1 * iio.imread("../../3dtests/pngs/bunny_zres_100_reweighted__009.png")
 
 
-ground_truth = bunny_high()
+def bunny_high_more_res():
+    return 1 * iio.imread("../../3dtests/pngs/bunny_zres_200__185.png")
 
-side = np.array(ground_truth.shape)
+
+def bunny_middle1_more_res():
+    return 1 * iio.imread("../../3dtests/pngs/bunny_zres_200__063.png")
+
+
+def bunny_middle2_more_res():
+    return 1 * iio.imread("../../3dtests/pngs/bunny_zres_200__104.png")
+
+
+def bunny_low_more_res():
+    return 1 * iio.imread("../../3dtests/pngs/bunny_zres_200__012.png")
+
+
+low_res = [bunny_low(), bunny_middle1(), bunny_middle2(), bunny_high()]
+higher_res = [bunny_low_more_res(), bunny_middle1_more_res(), bunny_middle2_more_res(), bunny_high_more_res()]
+
+ground_truth = low_res
+
+side = np.array(ground_truth[0].shape)
 origin = 0.0
 pitch = 1.0
 
@@ -121,7 +140,7 @@ t_spec = t.reshape(num_n, 1, 2) * t_offset.reshape(num_t, 1)
 t_spec += pitch * side / 2
 
 weighted_xrt = RayXRT(
-    dim_shape=ground_truth.shape,
+    dim_shape=ground_truth[0].shape,
     origin=origin,
     pitch=pitch,
     n_spec=n_spec.reshape(-1, 2),
@@ -129,7 +148,7 @@ weighted_xrt = RayXRT(
 )
 
 unweighted_xrt = RayXRT(
-    dim_shape=ground_truth.shape,
+    dim_shape=ground_truth[0].shape,
     origin=origin,
     pitch=pitch,
     n_spec=n_spec.reshape(-1, 2),
@@ -137,7 +156,7 @@ unweighted_xrt = RayXRT(
 )
 
 lcav_low = ReconstructionTechnique(
-    ground_truth=bunny_low(),
+    ground_truth=ground_truth[0],
     op=unweighted_xrt,
     regularizer=lambda_ * PositiveOrthant(weighted_xrt.codim_shape),
     initialisation=np.zeros(weighted_xrt.codim_shape),
@@ -145,7 +164,7 @@ lcav_low = ReconstructionTechnique(
 )
 
 lcav_high = ReconstructionTechnique(
-    ground_truth=bunny_high(),
+    ground_truth=ground_truth[-1],
     op=unweighted_xrt,
     regularizer=lambda_ * PositiveOrthant(weighted_xrt.codim_shape),
     initialisation=np.zeros(weighted_xrt.codim_shape),
@@ -153,7 +172,7 @@ lcav_high = ReconstructionTechnique(
 )
 
 lcav_middle1 = ReconstructionTechnique(
-    ground_truth=bunny_middle1(),
+    ground_truth=ground_truth[1],
     op=unweighted_xrt,
     regularizer=lambda_ * PositiveOrthant(weighted_xrt.codim_shape),
     initialisation=np.zeros(weighted_xrt.codim_shape),
@@ -161,7 +180,7 @@ lcav_middle1 = ReconstructionTechnique(
 )
 
 lcav_middle2 = ReconstructionTechnique(
-    ground_truth=bunny_middle2(),
+    ground_truth=ground_truth[2],
     op=unweighted_xrt,
     regularizer=lambda_ * PositiveOrthant(weighted_xrt.codim_shape),
     initialisation=np.zeros(weighted_xrt.codim_shape),
@@ -203,58 +222,58 @@ def threshold_processing_2(image):
     return res
 
 
-def run_both_middle():
+def run_both_middle(append_title=""):
     lcav_middle1_img = lcav_middle1.run()
     lcav_middle2_img = lcav_middle2.run()
 
     plot_four_images(
-        [bunny_middle1(), lcav_middle1_img, bunny_middle2(), lcav_middle2_img],
+        [ground_truth[1], lcav_middle1_img, ground_truth[2], lcav_middle2_img],
         ["GT mid 1", "Mid 1", "GT mid 2", "Mid 2"],
         "No thresholding",
-        "no_thresholding_part2.png",
+        f"no_thresholding_part2{append_title}.png",
     )
 
     plot_four_images(
-        [bunny_middle1(), lcav_middle1_img, bunny_middle2(), lcav_middle2_img],
+        [ground_truth[1], lcav_middle1_img, ground_truth[2], lcav_middle2_img],
         ["GT mid 1", "Mid 1", "GT mid 2", "Mid 2"],
         "With thresholding - 2 colors",
-        "with_thresholding_2_colors_part2.png",
+        f"with_thresholding_2_colors_part2{append_title}.png",
         processing=[lambda x: x, threshold_processing_1, lambda x: x, threshold_processing_1],
     )
 
     plot_four_images(
-        [bunny_middle1(), lcav_middle1_img, bunny_middle2(), lcav_middle2_img],
+        [ground_truth[1], lcav_middle1_img, ground_truth[2], lcav_middle2_img],
         ["GT mid 1", "Mid 1", "GT mid 2", "Mid 2"],
         "With thresholding - 3 colors",
-        "with_thresholding_3_colors_part2.png",
+        f"with_thresholding_3_colors_part2{append_title}.png",
         processing=[lambda x: x, threshold_processing_2, lambda x: x, threshold_processing_2],
     )
 
 
-def run_high_low():
+def run_high_low(append_title=""):
     lcav_low_img = lcav_low.run()
     lcav_high_img = lcav_high.run()
 
     plot_four_images(
-        [bunny_low(), lcav_low_img, bunny_high(), lcav_high_img],
+        [ground_truth[0], lcav_low_img, ground_truth[-1], lcav_high_img],
         ["GT low", "Low", "GT high", "High"],
         "No thresholding",
-        "no_thresholding_part1.png",
+        f"no_thresholding_part1{append_title}.png",
     )
 
     plot_four_images(
-        [bunny_low(), lcav_low_img, bunny_high(), lcav_high_img],
+        [ground_truth[0], lcav_low_img, ground_truth[-1], lcav_high_img],
         ["GT low", "Low", "GT high", "High"],
         "With thresholding - 2 colors",
-        "with_thresholding_2_colors_part1.png",
+        f"with_thresholding_2_colors_part1{append_title}.png",
         processing=[lambda x: x, threshold_processing_1, lambda x: x, threshold_processing_1],
     )
 
     plot_four_images(
-        [bunny_low(), lcav_low_img, bunny_high(), lcav_high_img],
+        [ground_truth[0], lcav_low_img, ground_truth[-1], lcav_high_img],
         ["GT low", "Low", "GT high", "High"],
         "With thresholding - 3 colors",
-        "with_thresholding_3_colors_part1.png",
+        f"with_thresholding_3_colors_part1{append_title}.png",
         processing=[lambda x: x, threshold_processing_2, lambda x: x, threshold_processing_2],
     )
 

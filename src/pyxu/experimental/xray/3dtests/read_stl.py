@@ -5,7 +5,7 @@ import tqdm
 from matplotlib import pyplot as plt
 
 
-def read_stl_file(stl_path, png_path, npy_path, resolution=100):
+def read_stl_file(stl_path, png_path, npy_path, resolution=100, reweighting=True):
     stltovoxel.convert_file(
         input_file_path=stl_path,
         output_file_path=png_path + ".png",
@@ -22,8 +22,9 @@ def read_stl_file(stl_path, png_path, npy_path, resolution=100):
         arrays.append(iio.imread(f"{png_path}_{i:{num_digits}}.png"))
     array = np.stack(arrays, axis=2)
 
-    summation = array.sum(axis=(1, 2), keepdims=True)
-    array = array / np.maximum(np.ones_like(summation), np.sqrt(summation))
+    if reweighting:
+        summation = array.sum(axis=(1, 2), keepdims=True)
+        array = array / np.maximum(np.ones_like(summation), np.sqrt(summation))
 
     np.save(npy_path, array)
 
@@ -38,10 +39,11 @@ def show_voxels(npy_path, image_path):
 
 if __name__ == "__main__":
     stl_path = "stls/Bunny-LowPoly.stl"
-    png_path = "pngs/bunny_zres_100_reweighted_"
-    npy_path = "../npys/bunny_zres_100_reweighted.npy"
-    image_path = "images/bunny_zres_100_reweighted.png"
-    resolution = 100
+    png_path = "pngs/bunny_zres_200_"
+    npy_path = "npys/bunny_zres_200.npy"
+    image_path = "images/bunny_zres_200.png"
+    resolution = 200
+    reweight = False
 
-    read_stl_file(stl_path=stl_path, png_path=png_path, npy_path=npy_path, resolution=resolution)
+    read_stl_file(stl_path=stl_path, png_path=png_path, npy_path=npy_path, resolution=resolution, reweighting=reweight)
     # show_voxels(npy_path=npy_path, image_path=image_path)
