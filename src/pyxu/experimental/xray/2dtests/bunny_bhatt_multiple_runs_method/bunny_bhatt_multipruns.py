@@ -62,14 +62,14 @@ class ReconstructionTechnique:
 
     def run(self, stop_crit=RelError(eps=1e-3) | MaxIter(200), post_process_optres=None, mu1=10, mu2=10):
         alpha = self.__run_epoch(self.initialisation, mu1=mu1, mu2=mu2, stop_crit=RelError(eps=1e-3) | MaxIter(200))
-        alpha = self.__run_epoch(alpha, mu1=mu1 / 2, mu2=mu2, stop_crit=RelError(eps=1e-4) | MaxIter(250))
-        alpha = self.__run_epoch(alpha, mu1=mu1 / 2, mu2=mu2 / 2, stop_crit=RelError(eps=1e-4) | MaxIter(250))
-        alpha = self.__run_epoch(alpha, mu1=mu1 / 4, mu2=mu2 / 2, stop_crit=RelError(eps=1e-5) | MaxIter(250))
-        alpha = self.__run_epoch(alpha, mu1=mu1 / 4, mu2=mu2 / 4, stop_crit=RelError(eps=1e-5) | MaxIter(250))
-        alpha = self.__run_epoch(alpha, mu1=mu1 / 8, mu2=mu2 / 4, stop_crit=RelError(eps=5e-6) | MaxIter(300))
-        alpha = self.__run_epoch(alpha, mu1=mu1 / 8, mu2=mu2 / 8, stop_crit=RelError(eps=5e-6) | MaxIter(300))
-        alpha = self.__run_epoch(alpha, mu1=mu1 / 16, mu2=mu2 / 8, stop_crit=RelError(eps=1e-6) | MaxIter(500))
-        alpha = self.__run_epoch(alpha, mu1=mu1 / 16, mu2=mu2 / 16, stop_crit=RelError(eps=1e-6) | MaxIter(500))
+        alpha = self.__run_epoch(alpha, mu1=mu1 / 2, mu2=mu2, stop_crit=RelError(eps=1e-3) | MaxIter(200))
+        alpha = self.__run_epoch(alpha, mu1=mu1 / 2, mu2=mu2 / 2, stop_crit=RelError(eps=1e-3) | MaxIter(200))
+        alpha = self.__run_epoch(alpha, mu1=mu1 / 4, mu2=mu2 / 2, stop_crit=RelError(eps=1e-5) | MaxIter(200))
+        alpha = self.__run_epoch(alpha, mu1=mu1 / 4, mu2=mu2 / 4, stop_crit=RelError(eps=1e-5) | MaxIter(200))
+        alpha = self.__run_epoch(alpha, mu1=mu1 / 8, mu2=mu2 / 4, stop_crit=RelError(eps=5e-6) | MaxIter(200))
+        alpha = self.__run_epoch(alpha, mu1=mu1 / 8, mu2=mu2 / 8, stop_crit=RelError(eps=5e-6) | MaxIter(200))
+        alpha = self.__run_epoch(alpha, mu1=mu1 / 16, mu2=mu2 / 8, stop_crit=RelError(eps=1e-6) | MaxIter(300))
+        alpha = self.__run_epoch(alpha, mu1=mu1 / 16, mu2=mu2 / 16, stop_crit=RelError(eps=1e-6) | MaxIter(300))
 
         if post_process_optres is not None:
             alpha = post_process_optres(alpha)
@@ -122,7 +122,7 @@ def bunny_low_more_res():
 low_res = [bunny_low(), bunny_middle1(), bunny_middle2(), bunny_high()]
 higher_res = [bunny_low_more_res(), bunny_middle1_more_res(), bunny_middle2_more_res(), bunny_high_more_res()]
 
-ground_truth = low_res
+ground_truth = higher_res
 
 side = np.array(ground_truth[0].shape)
 origin = 0.0
@@ -279,5 +279,6 @@ def run_high_low(append_title=""):
 
 
 if __name__ == "__main__":
-    run_high_low()
-    run_both_middle()
+    append_title = "_res200"
+    run_high_low(append_title)
+    run_both_middle(append_title)
