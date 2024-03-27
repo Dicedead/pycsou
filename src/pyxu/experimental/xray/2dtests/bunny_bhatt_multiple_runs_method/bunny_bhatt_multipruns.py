@@ -121,8 +121,9 @@ def bunny_low_more_res():
 
 low_res = [bunny_low(), bunny_middle1(), bunny_middle2(), bunny_high()]
 higher_res = [bunny_low_more_res(), bunny_middle1_more_res(), bunny_middle2_more_res(), bunny_high_more_res()]
-
-ground_truth = higher_res
+choose_higher_res = False
+ground_truth = higher_res if choose_higher_res else low_res
+append_title = "_res200" if choose_higher_res else ""
 
 side = np.array(ground_truth[0].shape)
 origin = 0.0
@@ -271,6 +272,5 @@ def run_high_low(append_title=""):
 
 
 if __name__ == "__main__":
-    append_title = "_res200"
     run_high_low(append_title)
     run_both_middle(append_title)
