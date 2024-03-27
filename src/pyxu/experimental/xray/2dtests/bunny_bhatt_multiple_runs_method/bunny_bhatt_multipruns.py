@@ -7,9 +7,9 @@ import numpy as np
 
 import pyxu.abc as pxa
 import pyxu.info.ptype as pxt
+import pyxu.operator.linop.xrt.ray as xray
 from pyxu.abc import ProxFunc
 from pyxu.operator import DiagonalOp, PositiveOrthant
-from pyxu.operator.linop.xrt.ray import RayXRT
 from pyxu.opt.solver import PGD
 from pyxu.opt.stop import MaxIter, RelError
 
@@ -25,7 +25,7 @@ lambda_ = 4
 class BhattLoss(pxa.DiffFunc):
     def __init__(
         self,
-        xrt: RayXRT,
+        xrt: xray.RayXRT,
         ground_truth: pxt.NDArray,
         mu1: pxt.Real,
         mu2: pxt.Real,
@@ -42,7 +42,7 @@ class BhattLoss(pxa.DiffFunc):
         bg_posort = PositiveOrthant(dim_shape=xrt.dim_shape).argshift(bg_argshift).argscale(-1).moreau_envelope(mu1)
         self._loss_fg = fg_posort * (fg_constant * xrt.T)
         self._loss_bg = bg_posort * (bg_constant * xrt.T)
-        self._reg = lambda_ * PositiveOrthant(weighted_xrt.codim_shape).moreau_envelope(mu2)
+        self._reg = lambda_ * PositiveOrthant(unweighted_xrt.codim_shape).moreau_envelope(mu2)
 
     def apply(self, arr):
         return self._loss_fg.apply(arr) + self._loss_bg.apply(arr) + self._reg(arr)
@@ -55,7 +55,7 @@ class BhattLoss(pxa.DiffFunc):
 @dataclass
 class ReconstructionTechnique:
     ground_truth: pxt.NDArray
-    op: RayXRT
+    op: xray.RayXRT
     regularizer: ProxFunc
     initialisation: pxt.NDArray
     diff_lip: float
@@ -139,15 +139,7 @@ n_spec = np.broadcast_to(n.reshape(num_n, 1, 2), (num_n, num_t, 2))
 t_spec = t.reshape(num_n, 1, 2) * t_offset.reshape(num_t, 1)
 t_spec += pitch * side / 2
 
-weighted_xrt = RayXRT(
-    dim_shape=ground_truth[0].shape,
-    origin=origin,
-    pitch=pitch,
-    n_spec=n_spec.reshape(-1, 2),
-    t_spec=t_spec.reshape(-1, 2),
-)
-
-unweighted_xrt = RayXRT(
+unweighted_xrt = xray.RayXRT(
     dim_shape=ground_truth[0].shape,
     origin=origin,
     pitch=pitch,
@@ -158,32 +150,32 @@ unweighted_xrt = RayXRT(
 lcav_low = ReconstructionTechnique(
     ground_truth=ground_truth[0],
     op=unweighted_xrt,
-    regularizer=lambda_ * PositiveOrthant(weighted_xrt.codim_shape),
-    initialisation=np.zeros(weighted_xrt.codim_shape),
+    regularizer=lambda_ * PositiveOrthant(unweighted_xrt.codim_shape),
+    initialisation=np.zeros(unweighted_xrt.codim_shape),
     diff_lip=40000,
 )
 
 lcav_high = ReconstructionTechnique(
     ground_truth=ground_truth[-1],
     op=unweighted_xrt,
-    regularizer=lambda_ * PositiveOrthant(weighted_xrt.codim_shape),
-    initialisation=np.zeros(weighted_xrt.codim_shape),
+    regularizer=lambda_ * PositiveOrthant(unweighted_xrt.codim_shape),
+    initialisation=np.zeros(unweighted_xrt.codim_shape),
     diff_lip=40000,
 )
 
 lcav_middle1 = ReconstructionTechnique(
     ground_truth=ground_truth[1],
     op=unweighted_xrt,
-    regularizer=lambda_ * PositiveOrthant(weighted_xrt.codim_shape),
-    initialisation=np.zeros(weighted_xrt.codim_shape),
+    regularizer=lambda_ * PositiveOrthant(unweighted_xrt.codim_shape),
+    initialisation=np.zeros(unweighted_xrt.codim_shape),
     diff_lip=40000,
 )
 
 lcav_middle2 = ReconstructionTechnique(
     ground_truth=ground_truth[2],
     op=unweighted_xrt,
-    regularizer=lambda_ * PositiveOrthant(weighted_xrt.codim_shape),
-    initialisation=np.zeros(weighted_xrt.codim_shape),
+    regularizer=lambda_ * PositiveOrthant(unweighted_xrt.codim_shape),
+    initialisation=np.zeros(unweighted_xrt.codim_shape),
     diff_lip=40000,
 )
 
