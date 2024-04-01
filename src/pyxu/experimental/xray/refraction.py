@@ -50,12 +50,12 @@ def snell_vectorial(n1: pxt.Real, n2: pxt.Real, k_incident: pxt.NDArray, n_norma
     ----------
     n1: refractive index of incoming ray's medium
     n2: refractive index of refracted ray's medium
-    k_incident: normalized incident ray (N, D)
-    n_normal: normalized normal ray (N, D)
+    k_incident: normalized incident ray (N, 3)
+    n_normal: normalized normal ray (N, 3)
 
     Returns
     -------
-    Refracted rays for each (k_incident, n_normal) pair, (N, D)
+    Refracted rays for each (k_incident, n_normal) pair, (N, 3)
 
     """
     xp = pxa.get_array_module(k_incident)
@@ -164,8 +164,8 @@ def refract(
 
     Parameters
     ----------
-    n_in: (N,D) ray direction outside cylinder (not necessarily normalized)
-    t_init: (N,D) ray position outside cylinder
+    n_in: (N,3) ray direction outside cylinder (not necessarily normalized)
+    t_init: (N,3) ray position outside cylinder
     r_spec: (3,) index of refraction of air/cylinder/jelly
     c_spec: (6,) glass thickness, cylinder external diameter, glass min height, glass max height, polymer min height,
                 polymer max height

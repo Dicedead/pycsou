@@ -193,6 +193,7 @@ t_spec += pitch * side / 2
 
 if refraction:
     possible_folders = [f"{x}_with_refraction" for x in possible_folders]
+    folder = possible_folders[idx_chosen]
 
     c_spec = [1, 2 * max(t_max) + 10, 0, 10, 0, 10]
     r_spec = [1, 1.4, 1.45]
