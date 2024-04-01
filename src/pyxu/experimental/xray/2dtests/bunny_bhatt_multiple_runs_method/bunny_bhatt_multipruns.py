@@ -301,5 +301,5 @@ def run_high_low(folder=""):
 
 
 if __name__ == "__main__":
-    run_high_low(folder)
-    # run_both_middle(folder)
+    # run_high_low(folder)
+    run_both_middle(folder)
