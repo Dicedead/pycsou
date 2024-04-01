@@ -5,7 +5,7 @@ import tqdm
 from matplotlib import pyplot as plt
 
 
-def read_stl_file(stl_path, png_path, npy_path, resolution=100, reweighting=True):
+def read_stl_file(stl_path, png_path, npy_path, resolution=100, reweighting=True, pad_width=0):
     stltovoxel.convert_file(
         input_file_path=stl_path,
         output_file_path=png_path + ".png",
@@ -19,7 +19,10 @@ def read_stl_file(stl_path, png_path, npy_path, resolution=100, reweighting=True
     num_digits = 1 + int(np.floor(np.log10(resolution)))
     num_digits = f"0{num_digits}"
     for i in tqdm.trange(resolution):
-        arrays.append(iio.imread(f"{png_path}_{i:{num_digits}}.png"))
+        tmp = 1 * iio.imread(f"{png_path}_{i:{num_digits}}.png")
+        if pad_width > 0:
+            tmp = np.pad(tmp, pad_width)
+        arrays.append(tmp)
     array = np.stack(arrays, axis=2)
 
     if reweighting:
@@ -39,11 +42,18 @@ def show_voxels(npy_path, image_path):
 
 if __name__ == "__main__":
     stl_path = "stls/Bunny-LowPoly.stl"
-    png_path = "pngs/bunny_zres_200_"
-    npy_path = "npys/bunny_zres_200.npy"
-    image_path = "images/bunny_zres_200.png"
-    resolution = 200
+    png_path = "pngs/bunny_zres_150_padded_"
+    npy_path = "npys/bunny_zres_150_padded.npy"
+    image_path = "images/bunny_zres_150_padded.png"
+    resolution = 150
     reweight = False
 
-    read_stl_file(stl_path=stl_path, png_path=png_path, npy_path=npy_path, resolution=resolution, reweighting=reweight)
+    read_stl_file(
+        stl_path=stl_path,
+        png_path=png_path,
+        npy_path=npy_path,
+        resolution=resolution,
+        reweighting=reweight,
+        pad_width=40,
+    )
     # show_voxels(npy_path=npy_path, image_path=image_path)
