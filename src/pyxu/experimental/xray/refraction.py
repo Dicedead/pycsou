@@ -50,12 +50,12 @@ def snell_vectorial(n1: pxt.Real, n2: pxt.Real, k_incident: pxt.NDArray, n_norma
     ----------
     n1: refractive index of incoming ray's medium
     n2: refractive index of refracted ray's medium
-    k_incident: normalized incident ray (N, 3)
-    n_normal: normalized normal ray (N, 3)
+    k_incident: normalized incident ray (N, D)
+    n_normal: normalized normal ray (N, D)
 
     Returns
     -------
-    Refracted rays for each (k_incident, n_normal) pair, (N, 3)
+    Refracted rays for each (k_incident, n_normal) pair, (N, D)
 
     """
     xp = pxa.get_array_module(k_incident)
@@ -80,12 +80,12 @@ def intersection_line_sphere(
     ----------
     radius: (1,) cylinder radius
     height: (2,) min and max cylinder heights
-    t_init: (N,3) position of ray outside cylinder
-    n_dir: (N,3) normalized direction of ray outside cylinder
+    t_init: (N,D) position of ray outside cylinder
+    n_dir: (N,D) normalized direction of ray outside cylinder
 
     Returns
     -------
-    Position of intersection with the sphere, (N,3)
+    Position of intersection with the sphere, (N,D)
     If no intersection: returns the nan vector.
 
     """
@@ -124,12 +124,12 @@ def intersection_polymer(c_spec: pxt.NDArray, t_in: pxt.NDArray, n_refracted: px
     Parameters
     ----------
     c_spec: (2,) glass thickness and cylinder external diameter
-    t_in: (N,3) position on cylinder border
-    n_refracted: (N,3) normalized direction inside cylinder (as in inside the glass)
+    t_in: (N,D) position on cylinder border
+    n_refracted: (N,D) normalized direction inside cylinder (as in inside the glass)
 
     Returns
     -------
-    Position of intersection with the polymer, (N,3)
+    Position of intersection with the polymer, (N,D)
     If no intersection: returns the nan vector.
 
     """
@@ -157,20 +157,22 @@ def intersection_cylinder(c_spec: pxt.NDArray, t_init: pxt.NDArray, n_in: pxt.ND
     return intersection_line_sphere(outer_radius, c_spec[-4:-2], t_init, n_in)
 
 
-def f(n_in: pxt.NDArray, t_init: pxt.NDArray, r_spec: pxt.NDArray, c_spec: pxt.NDArray) -> (pxt.NDArray, pxt.NDArray):
+def refract(
+    n_in: pxt.NDArray, t_init: pxt.NDArray, r_spec: pxt.NDArray, c_spec: pxt.NDArray
+) -> (pxt.NDArray, pxt.NDArray):
     """
 
     Parameters
     ----------
-    n_in: (N,3) ray direction outside cylinder (not necessarily normalized)
-    t_init: (N,3) ray position outside cylinder
+    n_in: (N,D) ray direction outside cylinder (not necessarily normalized)
+    t_init: (N,D) ray position outside cylinder
     r_spec: (3,) index of refraction of air/cylinder/jelly
     c_spec: (6,) glass thickness, cylinder external diameter, glass min height, glass max height, polymer min height,
                 polymer max height
 
     Returns
     -------
-    (n_out, t_out): ray direction/position inside cylinder, ((N,3), (N,3))
+    (n_out, t_out): ray direction/position inside cylinder, ((N,D), (N,D))
     Both vectors are nan-full if incoming ray does not enter jelly
 
     """
@@ -220,7 +222,7 @@ def test_f():
 
     t_init = np.array([[20, 0, 5], [-10, 0, 5]])
 
-    n_out, t_out = f(n_in, t_init, r_spec, c_spec)
+    n_out, t_out = refract(n_in, t_init, r_spec, c_spec)
 
     print(n_out)
     print(t_out)
