@@ -168,7 +168,7 @@ higher_res = [bunny_low_more_res(), bunny_middle1_more_res(), bunny_middle2_more
 padded = [bunny_low_padded(), bunny_middle1_padded(), bunny_middle2_padded(), bunny_high_padded()]
 middle_res = [bunny_low_middle_res(), bunny_middle1_middle_res(), bunny_middle2_middle_res(), bunny_high_middle_res()]
 idx_chosen = 3
-refraction = False
+refraction = True
 
 possible_gts = [low_res, higher_res, padded, middle_res]
 possible_folders = ["res_100", "res_200", "res_150_padded", "res_150"]
