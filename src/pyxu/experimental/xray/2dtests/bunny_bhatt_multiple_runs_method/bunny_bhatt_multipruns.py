@@ -148,19 +148,19 @@ bunny_middle_res = np.load("../../3dtests/npys/bunny_zres_150.npy")
 
 
 def bunny_high_middle_res():
-    return bunny_middle_res[:, :, 185]
+    return bunny_middle_res[:, :, 133]
 
 
 def bunny_middle1_middle_res():
-    return bunny_middle_res[:, :, 63]
+    return bunny_middle_res[:, :, 74]
 
 
 def bunny_middle2_middle_res():
-    return bunny_middle_res[:, :, 104]
+    return bunny_middle_res[:, :, 84]
 
 
 def bunny_low_middle_res():
-    return bunny_middle_res[:, :, 12]
+    return bunny_middle_res[:, :, 9]
 
 
 low_res = [bunny_low(), bunny_middle1(), bunny_middle2(), bunny_high()]
