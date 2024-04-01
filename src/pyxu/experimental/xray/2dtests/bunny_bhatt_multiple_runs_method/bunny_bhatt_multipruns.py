@@ -1,7 +1,6 @@
 import warnings
 from dataclasses import dataclass
 
-import imageio.v3 as iio
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -87,52 +86,61 @@ class ReconstructionTechnique:
         return alpha["x"]
 
 
+bunny_low_res = bunny_more_res = np.load("../../3dtests/npys/bunny_zres_100.npy")
+
+
 def bunny_high():
-    return 1 * iio.imread("../../3dtests/pngs/bunny_100/bunny_zres_100_088.png")
+    return bunny_low_res[:, :, 88]
 
 
 def bunny_middle1():
-    return 1 * iio.imread("../../3dtests/pngs/bunny_100/bunny_zres_100_056.png")
+    return bunny_low_res[:, :, 56]
 
 
 def bunny_middle2():
-    return 1 * iio.imread("../../3dtests/pngs/bunny_100/bunny_zres_100_033.png")
+    return bunny_low_res[:, :, 33]
 
 
 def bunny_low():
-    return 1 * iio.imread("../../3dtests/pngs/bunny_100/bunny_zres_100_009.png")
+    return bunny_low_res[:, :, 9]
+
+
+bunny_more_res = np.load("../../3dtests/npys/bunny_zres_200.npy")
 
 
 def bunny_high_more_res():
-    return 1 * iio.imread("../../3dtests/pngs/bunny_200/bunny_zres_200__185.png")
+    return bunny_more_res[:, :, 185]
 
 
 def bunny_middle1_more_res():
-    return 1 * iio.imread("../../3dtests/pngs/bunny_200/bunny_zres_200__063.png")
+    return bunny_more_res[:, :, 63]
 
 
 def bunny_middle2_more_res():
-    return 1 * iio.imread("../../3dtests/pngs/bunny_200/bunny_zres_200__104.png")
+    return bunny_more_res[:, :, 104]
 
 
 def bunny_low_more_res():
-    return 1 * iio.imread("../../3dtests/pngs/bunny_200/bunny_zres_200__012.png")
+    return bunny_more_res[:, :, 12]
+
+
+padded_bunny = np.load("../../3dtests/npys/bunny_zres_150_padded.npy")
 
 
 def bunny_high_padded():
-    return np.load("../../3dtests/npys/bunny_zres_150_padded.npy")[:, :, 133]
+    return padded_bunny[:, :, 133]
 
 
 def bunny_middle1_padded():
-    return np.load("../../3dtests/npys/bunny_zres_150_padded.npy")[:, :, 74]
+    return padded_bunny[:, :, 74]
 
 
 def bunny_middle2_padded():
-    return np.load("../../3dtests/npys/bunny_zres_150_padded.npy")[:, :, 84]
+    return padded_bunny[:, :, 84]
 
 
 def bunny_low_padded():
-    return np.load("../../3dtests/npys/bunny_zres_150_padded.npy")[:, :, 9]
+    return padded_bunny[:, :, 9]
 
 
 low_res = [bunny_low(), bunny_middle1(), bunny_middle2(), bunny_high()]
