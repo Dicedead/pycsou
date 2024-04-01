@@ -209,6 +209,8 @@ if refraction:
     n_spec = normalize(n_spec.reshape(-1, 3)[:, :2])
     t_spec = t_spec.reshape(-1, 3)[:, :2]
 
+    t_spec += pitch * side / 2
+
 unweighted_xrt = xray.RayXRT(
     dim_shape=ground_truth[0].shape,
     origin=origin,
@@ -216,6 +218,9 @@ unweighted_xrt = xray.RayXRT(
     n_spec=n_spec.reshape(-1, 2),
     t_spec=t_spec.reshape(-1, 2),
 )
+
+fig = unweighted_xrt.diagnostic_plot()
+fig.savefig("./diag.png")
 
 lcav_low = ReconstructionTechnique(
     ground_truth=ground_truth[0],
