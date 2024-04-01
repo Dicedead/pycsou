@@ -8,7 +8,7 @@ import pyxu.abc as pxa
 import pyxu.info.ptype as pxt
 import pyxu.operator.linop.xrt.ray as xray
 from pyxu.abc import ProxFunc
-from pyxu.experimental.xray.refraction import refract
+from pyxu.experimental.xray.refraction import normalize, refract
 from pyxu.operator import DiagonalOp, PositiveOrthant
 from pyxu.opt.solver import PGD
 from pyxu.opt.stop import MaxIter, RelError
@@ -181,7 +181,7 @@ origin = 0.0
 pitch = 1.0
 
 angle = np.linspace(0, 2 * np.pi, num_n, endpoint=False)
-t_max = pitch * side / 2  # 10% over ball radius
+t_max = pitch * side / 2
 t_offset = np.linspace(-t_max[0], t_max[1], num_t, endpoint=True)
 
 n = np.stack([np.cos(angle), np.sin(angle)], axis=1)
@@ -194,12 +194,19 @@ t_spec += pitch * side / 2
 if refraction:
     possible_folders = [f"{x}_with_refraction" for x in possible_folders]
 
-    c_spec = [1, 8, 0, 10, 0, 10]
+    c_spec = [1, 2 * max(t_max) + 10, 0, 10, 0, 10]
     r_spec = [1, 1.4, 1.45]
 
-    n_spec, t_spec = refract(n_spec, t_spec, r_spec, c_spec)
+    n_spec, t_spec = refract(
+        np.pad(n_spec.reshape(-1, 2), pad_width=[(0, 0), (0, 1)], constant_values=0),
+        np.pad(t_spec.reshape(-1, 2), pad_width=[(0, 0), (0, 1)], constant_values=5),
+        r_spec,
+        c_spec,
+    )
     n_spec = n_spec[~np.isnan(n_spec)]
     t_spec = t_spec[~np.isnan(t_spec)]
+    n_spec = normalize(n_spec.reshape(-1, 3)[:, :2])
+    t_spec = t_spec.reshape(-1, 3)[:, :2]
 
 unweighted_xrt = xray.RayXRT(
     dim_shape=ground_truth[0].shape,
