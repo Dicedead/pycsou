@@ -42,9 +42,9 @@ def show_voxels(npy_path, image_path):
 
 if __name__ == "__main__":
     stl_path = "stls/Bunny-LowPoly.stl"
-    png_path = "pngs/bunny_zres_150_padded_"
-    npy_path = "npys/bunny_zres_150_padded.npy"
-    image_path = "images/bunny_zres_150_padded.png"
+    png_path = "pngs/bunny_zres_150_"
+    npy_path = "npys/bunny_zres_150.npy"
+    image_path = "images/bunny_zres_150.png"
     resolution = 150
     reweight = False
 
@@ -54,6 +54,6 @@ if __name__ == "__main__":
         npy_path=npy_path,
         resolution=resolution,
         reweighting=reweight,
-        pad_width=40,
+        pad_width=0,
     )
     # show_voxels(npy_path=npy_path, image_path=image_path)

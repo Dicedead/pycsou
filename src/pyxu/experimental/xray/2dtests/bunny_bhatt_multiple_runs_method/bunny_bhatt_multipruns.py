@@ -8,6 +8,7 @@ import pyxu.abc as pxa
 import pyxu.info.ptype as pxt
 import pyxu.operator.linop.xrt.ray as xray
 from pyxu.abc import ProxFunc
+from pyxu.experimental.xray.refraction import refract
 from pyxu.operator import DiagonalOp, PositiveOrthant
 from pyxu.opt.solver import PGD
 from pyxu.opt.stop import MaxIter, RelError
@@ -143,13 +144,34 @@ def bunny_low_padded():
     return padded_bunny[:, :, 9]
 
 
+bunny_middle_res = np.load("../../3dtests/npys/bunny_zres_150.npy")
+
+
+def bunny_high_middle_res():
+    return bunny_middle_res[:, :, 185]
+
+
+def bunny_middle1_middle_res():
+    return bunny_middle_res[:, :, 63]
+
+
+def bunny_middle2_middle_res():
+    return bunny_middle_res[:, :, 104]
+
+
+def bunny_low_middle_res():
+    return bunny_middle_res[:, :, 12]
+
+
 low_res = [bunny_low(), bunny_middle1(), bunny_middle2(), bunny_high()]
 higher_res = [bunny_low_more_res(), bunny_middle1_more_res(), bunny_middle2_more_res(), bunny_high_more_res()]
 padded = [bunny_low_padded(), bunny_middle1_padded(), bunny_middle2_padded(), bunny_high_padded()]
-idx_chosen = 2
+middle_res = [bunny_low_middle_res(), bunny_middle1_middle_res(), bunny_middle2_middle_res(), bunny_high_middle_res()]
+idx_chosen = 3
+refraction = False
 
-possible_gts = [low_res, higher_res, padded]
-possible_folders = ["res_100", "res_200", "res_150_padded"]
+possible_gts = [low_res, higher_res, padded, middle_res]
+possible_folders = ["res_100", "res_200", "res_150_padded", "res_150"]
 
 ground_truth = possible_gts[idx_chosen]
 folder = possible_folders[idx_chosen]
@@ -168,6 +190,16 @@ t = n[:, [1, 0]] * np.r_[-1, 1]  # <n, t> = 0
 n_spec = np.broadcast_to(n.reshape(num_n, 1, 2), (num_n, num_t, 2))
 t_spec = t.reshape(num_n, 1, 2) * t_offset.reshape(num_t, 1)
 t_spec += pitch * side / 2
+
+if refraction:
+    possible_folders = [f"{x}_with_refraction" for x in possible_folders]
+
+    c_spec = [1, 8, 0, 10, 0, 10]
+    r_spec = [1, 1.4, 1.45]
+
+    n_spec, t_spec = refract(n_spec, t_spec, r_spec, c_spec)
+    n_spec = n_spec[~np.isnan(n_spec)]
+    t_spec = t_spec[~np.isnan(t_spec)]
 
 unweighted_xrt = xray.RayXRT(
     dim_shape=ground_truth[0].shape,
@@ -301,5 +333,5 @@ def run_high_low(folder=""):
 
 
 if __name__ == "__main__":
-    # run_high_low(folder)
+    run_high_low(folder)
     run_both_middle(folder)
