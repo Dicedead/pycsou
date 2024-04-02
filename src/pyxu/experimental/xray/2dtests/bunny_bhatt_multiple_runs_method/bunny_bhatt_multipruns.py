@@ -167,7 +167,8 @@ low_res = [bunny_low(), bunny_middle1(), bunny_middle2(), bunny_high()]
 higher_res = [bunny_low_more_res(), bunny_middle1_more_res(), bunny_middle2_more_res(), bunny_high_more_res()]
 padded = [bunny_low_padded(), bunny_middle1_padded(), bunny_middle2_padded(), bunny_high_padded()]
 middle_res = [bunny_low_middle_res(), bunny_middle1_middle_res(), bunny_middle2_middle_res(), bunny_high_middle_res()]
-idx_chosen = 3
+
+idx_chosen = 2
 refraction = True
 
 possible_gts = [low_res, higher_res, padded, middle_res]
