@@ -196,8 +196,14 @@ if refraction:
     possible_folders = [f"{x}_with_refraction" for x in possible_folders]
     folder = possible_folders[idx_chosen]
 
-    c_spec = [1, 2 * max(t_max) + 10, 0, 10, 0, 10]
+    external_diameter = 5 * max(t_max) + 10
+
+    c_spec = [1, external_diameter, 0, 10, 0, 10]
     r_spec = [1, 1.4, 1.45]
+
+    t_spec -= 3 * external_diameter * n_spec
+
+    n_spec_copy, t_spec_copy = n_spec.copy(), t_spec.copy()
 
     n_spec, t_spec = refract(
         np.pad(n_spec.reshape(-1, 2), pad_width=[(0, 0), (0, 1)], constant_values=0),
@@ -210,7 +216,6 @@ if refraction:
     n_spec = normalize(n_spec.reshape(-1, 3)[:, :2])
     t_spec = t_spec.reshape(-1, 3)[:, :2]
 
-    t_spec += pitch * side / 2
 
 unweighted_xrt = xray.RayXRT(
     dim_shape=ground_truth[0].shape,
@@ -220,8 +225,8 @@ unweighted_xrt = xray.RayXRT(
     t_spec=t_spec.reshape(-1, 2),
 )
 
-fig = unweighted_xrt.diagnostic_plot()
-fig.savefig("./diag.png")
+# fig = unweighted_xrt.diagnostic_plot()
+# fig.savefig("./diag.png")
 
 lcav_low = ReconstructionTechnique(
     ground_truth=ground_truth[0],

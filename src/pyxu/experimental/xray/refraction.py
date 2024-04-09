@@ -92,17 +92,19 @@ def intersection_line_sphere(
     xp = pxa.get_array_module(t_init)
 
     t_init_2 = t_init[:, :2]
-    n_dir_2 = n_dir[:, :2]
+    n_dir_2 = normalize(n_dir[:, :2])
     dot_prod = xp.einsum("ij,ij->i", t_init_2, n_dir_2)
 
     radicand = (dot_prod**2) + radius * radius - (t_init_2**2).sum(axis=-1)
 
     no_intersec_mask = radicand < 0 | xp.any(xp.isnan(n_dir), axis=-1)
-    radicand[no_intersec_mask] = 0.0
+    radicand[no_intersec_mask] = xp.nan
 
     sqrt_rad = xp.sqrt(radicand)
     x1 = -dot_prod + sqrt_rad
+    x1[x1 < 0] = xp.nan
     x2 = -dot_prod - sqrt_rad
+    x2[x2 < 0] = xp.nan
 
     v1 = t_init + n_dir * x1[:, xp.newaxis]
     v2 = t_init + n_dir * x2[:, xp.newaxis]
@@ -198,14 +200,14 @@ def sine(v, w):
     return sines
 
 
-def test_snell():
+def snell_test():
     k = np.array([[1, -1, 0], [-1, -4, -5], [-1, -2, 6], [5, 3, 2]])
     k = k / np.linalg.norm(k, axis=-1)[:, np.newaxis]
     k = k
     n = np.array([[0, 1, 0], [1, 5, 1], [1, 2, 9], [5, 1, 4]])
     n = n / np.linalg.norm(n, axis=-1)[:, np.newaxis]
-    n1 = 1.9
-    n2 = 1
+    n1 = 1.3
+    n2 = 1.6
     res1 = snell_vectorial(n1, n2, k, n)
 
     print(snell_vectorial(n1, n2, k, n))
@@ -215,12 +217,12 @@ def test_snell():
     print(n2 * sine(res1, n) - n1 * sine(k, n))
 
 
-def test_f():
+def refraction_test():
     c_spec = [1, 8, 0, 10, 0, 10]
-    r_spec = [1, 1.4, 1.45]
-    n_in = np.array([[-1, 0, 0], [-1, 0.4, 0.1]])
+    r_spec = [1, 1, 1]
+    n_in = np.array([[-1, 0, 0], [-1, 0.4, 0.1], [1, -0.4, 0.1]])
 
-    t_init = np.array([[20, 0, 5], [-10, 0, 5]])
+    t_init = np.array([[20, 0, 5], [-10, 0, 5], [-10, 0, 5]])
 
     n_out, t_out = refract(n_in, t_init, r_spec, c_spec)
 
@@ -228,5 +230,50 @@ def test_f():
     print(t_out)
 
 
+def refraction_test_2():
+    num_n = 4
+    num_t = 3
+
+    side = np.r_[200, 200]
+    pitch = 1.0
+
+    angle = np.linspace(0, 2 * np.pi, num_n, endpoint=False)
+    t_max = pitch * side / 2
+    t_offset = np.linspace(-t_max[0], t_max[1], num_t, endpoint=True)
+
+    n = np.stack([np.cos(angle), np.sin(angle)], axis=1)
+    t = n[:, [1, 0]] * np.r_[-1, 1]  # <n, t> = 0
+
+    n_spec = np.broadcast_to(n.reshape(num_n, 1, 2), (num_n, num_t, 2))
+    t_spec = t.reshape(num_n, 1, 2) * t_offset.reshape(num_t, 1)
+
+    external_diameter = 5 * max(t_max) + 10
+
+    t_spec -= 3 * external_diameter * n_spec
+
+    c_spec = [1, external_diameter, 0, 10, 0, 10]
+    r_spec = [1.0, 1.0, 1.0]
+
+    n_spec_copy, t_spec_copy = n_spec.copy(), t_spec.copy()
+
+    n_spec, t_spec = refract(
+        np.pad(n_spec.reshape(-1, 2), pad_width=[(0, 0), (0, 1)], constant_values=0),
+        np.pad(t_spec.reshape(-1, 2), pad_width=[(0, 0), (0, 1)], constant_values=5),
+        r_spec,
+        c_spec,
+    )
+    n_spec = n_spec[~np.isnan(n_spec)]
+    t_spec = t_spec[~np.isnan(t_spec)]
+    n_spec = normalize(n_spec.reshape(-1, 3)[:, :2])
+    t_spec = t_spec.reshape(-1, 3)[:, :2]
+
+    print(n_spec_copy)
+    print(t_spec_copy)
+    print(n_spec)
+    print(t_spec)
+
+    print(np.linalg.norm(n_spec - n_spec_copy.reshape(-1, 2)))
+
+
 if __name__ == "__main__":
-    test_f()
+    refraction_test_2()
