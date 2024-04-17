@@ -17,8 +17,8 @@ warnings.filterwarnings("ignore")
 
 dh = 0.9
 dl = 0.5
-num_n = 1000
-num_t = 350
+num_n = 3000
+num_t = 100
 lambda_ = 4
 
 
@@ -42,7 +42,7 @@ class BhattLoss(pxa.DiffFunc):
         bg_posort = PositiveOrthant(dim_shape=xrt.dim_shape).argshift(bg_argshift).argscale(-1).moreau_envelope(mu1)
         self._loss_fg = fg_posort * (fg_constant * xrt.T)
         self._loss_bg = bg_posort * (bg_constant * xrt.T)
-        self._reg = lambda_ * PositiveOrthant(unweighted_xrt.codim_shape).moreau_envelope(mu2)
+        self._reg = lambda_ * PositiveOrthant(xrt.codim_shape).moreau_envelope(mu2)
 
     def apply(self, arr):
         return self._loss_fg.apply(arr) + self._loss_bg.apply(arr) + self._reg(arr)
@@ -63,13 +63,13 @@ class ReconstructionTechnique:
     def run(self, stop_crit=RelError(eps=1e-3) | MaxIter(200), post_process_optres=None, mu1=10, mu2=10):
         alpha = self.__run_epoch(self.initialisation, mu1=mu1, mu2=mu2, stop_crit=RelError(eps=1e-3) | MaxIter(200))
         alpha = self.__run_epoch(alpha, mu1=mu1 / 2, mu2=mu2, stop_crit=RelError(eps=1e-3) | MaxIter(200))
-        alpha = self.__run_epoch(alpha, mu1=mu1 / 2, mu2=mu2 / 2, stop_crit=RelError(eps=1e-3) | MaxIter(200))
-        alpha = self.__run_epoch(alpha, mu1=mu1 / 4, mu2=mu2 / 2, stop_crit=RelError(eps=1e-5) | MaxIter(200))
-        alpha = self.__run_epoch(alpha, mu1=mu1 / 4, mu2=mu2 / 4, stop_crit=RelError(eps=1e-5) | MaxIter(200))
-        alpha = self.__run_epoch(alpha, mu1=mu1 / 8, mu2=mu2 / 4, stop_crit=RelError(eps=5e-6) | MaxIter(200))
-        alpha = self.__run_epoch(alpha, mu1=mu1 / 8, mu2=mu2 / 8, stop_crit=RelError(eps=5e-6) | MaxIter(200))
-        alpha = self.__run_epoch(alpha, mu1=mu1 / 16, mu2=mu2 / 8, stop_crit=RelError(eps=1e-6) | MaxIter(300))
-        alpha = self.__run_epoch(alpha, mu1=mu1 / 16, mu2=mu2 / 16, stop_crit=RelError(eps=1e-6) | MaxIter(300))
+        alpha = self.__run_epoch(alpha, mu1=mu1 / 2, mu2=mu2 / 2, stop_crit=RelError(eps=1e-3) | MaxIter(100))
+        alpha = self.__run_epoch(alpha, mu1=mu1 / 4, mu2=mu2 / 2, stop_crit=RelError(eps=1e-5) | MaxIter(100))
+        alpha = self.__run_epoch(alpha, mu1=mu1 / 4, mu2=mu2 / 4, stop_crit=RelError(eps=1e-5) | MaxIter(50))
+        alpha = self.__run_epoch(alpha, mu1=mu1 / 8, mu2=mu2 / 4, stop_crit=RelError(eps=5e-6) | MaxIter(50))
+        alpha = self.__run_epoch(alpha, mu1=mu1 / 8, mu2=mu2 / 8, stop_crit=RelError(eps=5e-6) | MaxIter(50))
+        alpha = self.__run_epoch(alpha, mu1=mu1 / 16, mu2=mu2 / 8, stop_crit=RelError(eps=1e-6) | MaxIter(50))
+        alpha = self.__run_epoch(alpha, mu1=mu1 / 16, mu2=mu2 / 16, stop_crit=RelError(eps=1e-6) | MaxIter(50))
 
         if post_process_optres is not None:
             alpha = post_process_optres(alpha)
@@ -85,6 +85,19 @@ class ReconstructionTechnique:
         pgd.fit(x0=x0, stop_crit=stop_crit, track_objective=True, tau=1 / self.diff_lip)
         alpha, _ = pgd.stats()
         return alpha["x"]
+
+
+def ellipsis(side_a, num_a, side_b, num_b):
+    side_a = side_a / 2
+    side_b = side_b / 2
+    x, y = np.meshgrid(np.linspace(-side_a, side_a, num_a), np.linspace(-side_b, side_b, num_b))
+    ground_truth = 1 * ((x / side_a) ** 2 + (y / side_b) ** 2 <= 1)
+    return ground_truth
+
+
+def absorption_coeff(sides, transmittance_ratio):
+    sides = pitch * sides
+    return -np.log(transmittance_ratio) * np.sum(sides) / (2 * np.prod(sides))
 
 
 bunny_low_res = bunny_more_res = np.load("../../3dtests/npys/bunny_zres_100.npy")
@@ -170,6 +183,9 @@ middle_res = [bunny_low_middle_res(), bunny_middle1_middle_res(), bunny_middle2_
 
 idx_chosen = 2
 refraction = True
+weighted = True
+weighted_heavy = False
+transmittance_ratio = 0.5 if weighted_heavy else 0.95  # I_center = trans_ratio * I_0
 
 possible_gts = [low_res, higher_res, padded, middle_res]
 possible_folders = ["res_100", "res_200", "res_150_padded", "res_150"]
@@ -192,18 +208,18 @@ n_spec = np.broadcast_to(n.reshape(num_n, 1, 2), (num_n, num_t, 2))
 t_spec = t.reshape(num_n, 1, 2) * t_offset.reshape(num_t, 1)
 t_spec += pitch * side / 2
 
+w_spec = absorption_coeff(side, transmittance_ratio) * ellipsis(pitch * side[1], side[1], pitch * side[0], side[0])
+
 if refraction:
     possible_folders = [f"{x}_with_refraction" for x in possible_folders]
     folder = possible_folders[idx_chosen]
 
-    external_diameter = 5 * max(t_max) + 10
+    external_diameter = 5 * 2 * max(t_max) + 10
 
     c_spec = [1, external_diameter, 0, 10, 0, 10]
     r_spec = [1, 1.4, 1.45]
 
     t_spec -= 3 * external_diameter * n_spec
-
-    n_spec_copy, t_spec_copy = n_spec.copy(), t_spec.copy()
 
     n_spec, t_spec = refract(
         np.pad(n_spec.reshape(-1, 2), pad_width=[(0, 0), (0, 1)], constant_values=0),
@@ -216,47 +232,62 @@ if refraction:
     n_spec = normalize(n_spec.reshape(-1, 3)[:, :2])
     t_spec = t_spec.reshape(-1, 3)[:, :2]
 
+if weighted:
+    folder = folder + "_weighted_heavy" if weighted_heavy else folder + "_weighted_light"
 
-unweighted_xrt = xray.RayXRT(
-    dim_shape=ground_truth[0].shape,
-    origin=origin,
-    pitch=pitch,
-    n_spec=n_spec.reshape(-1, 2),
-    t_spec=t_spec.reshape(-1, 2),
+
+xrt = (
+    xray.RayXRT(
+        dim_shape=ground_truth[0].shape,
+        origin=origin,
+        pitch=pitch,
+        n_spec=n_spec.reshape(-1, 2),
+        t_spec=t_spec.reshape(-1, 2),
+    )
+    if not weighted
+    else xray.RayWXRT(
+        dim_shape=ground_truth[0].shape,
+        origin=origin,
+        pitch=pitch,
+        n_spec=n_spec.reshape(-1, 2),
+        t_spec=t_spec.reshape(-1, 2),
+        w_spec=w_spec,
+    )
 )
+
 
 # fig = unweighted_xrt.diagnostic_plot()
 # fig.savefig("./diag.png")
 
 lcav_low = ReconstructionTechnique(
     ground_truth=ground_truth[0],
-    op=unweighted_xrt,
-    regularizer=lambda_ * PositiveOrthant(unweighted_xrt.codim_shape),
-    initialisation=np.zeros(unweighted_xrt.codim_shape),
+    op=xrt,
+    regularizer=lambda_ * PositiveOrthant(xrt.codim_shape),
+    initialisation=np.zeros(xrt.codim_shape),
     diff_lip=40000,
 )
 
 lcav_high = ReconstructionTechnique(
     ground_truth=ground_truth[-1],
-    op=unweighted_xrt,
-    regularizer=lambda_ * PositiveOrthant(unweighted_xrt.codim_shape),
-    initialisation=np.zeros(unweighted_xrt.codim_shape),
+    op=xrt,
+    regularizer=lambda_ * PositiveOrthant(xrt.codim_shape),
+    initialisation=np.zeros(xrt.codim_shape),
     diff_lip=40000,
 )
 
 lcav_middle1 = ReconstructionTechnique(
     ground_truth=ground_truth[1],
-    op=unweighted_xrt,
-    regularizer=lambda_ * PositiveOrthant(unweighted_xrt.codim_shape),
-    initialisation=np.zeros(unweighted_xrt.codim_shape),
+    op=xrt,
+    regularizer=lambda_ * PositiveOrthant(xrt.codim_shape),
+    initialisation=np.zeros(xrt.codim_shape),
     diff_lip=40000,
 )
 
 lcav_middle2 = ReconstructionTechnique(
     ground_truth=ground_truth[2],
-    op=unweighted_xrt,
-    regularizer=lambda_ * PositiveOrthant(unweighted_xrt.codim_shape),
-    initialisation=np.zeros(unweighted_xrt.codim_shape),
+    op=xrt,
+    regularizer=lambda_ * PositiveOrthant(xrt.codim_shape),
+    initialisation=np.zeros(xrt.codim_shape),
     diff_lip=40000,
 )
 
@@ -353,4 +384,4 @@ def run_high_low(folder=""):
 
 if __name__ == "__main__":
     run_high_low(folder)
-    run_both_middle(folder)
+    # run_both_middle(folder)
