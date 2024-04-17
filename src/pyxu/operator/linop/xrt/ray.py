@@ -13,6 +13,7 @@ import pyxu.util as pxu
 
 __all__ = [
     "RayXRT",
+    "RayWXRT",
 ]
 
 
@@ -53,8 +54,11 @@ class RayXRT(pxa.LinOp):
 
     Notes
     -----
-    * :py:class:`~pyxu.operator.RayXRT` requires LLVM installed on the system. See the `Dr.Jit documentation
-      <https://drjit.readthedocs.io/en/latest/index.html>`_ for details.
+    * Using :py:class:`~pyxu_xrt.operator.RayXRT` on the CPU requires LLVM.
+      See the `Dr.Jit documentation <https://drjit.readthedocs.io/en/latest/index.html>`_ for details.
+    * Using :py:class:`~pyxu_xrt.operator.RayXRT` on the GPU requires installing Pyxu with GPU add-ons.
+      See the `Pyxu install guide
+      <https://pyxu-org.github.io/intro/installation.html#installation-with-optional-dependencies>`_ for details.
     """
 
     def __init__(
@@ -84,9 +88,10 @@ class RayXRT(pxa.LinOp):
 
         Notes
         -----
-        * :py:class:`~pyxu.operator.RayXRT` instances are **not arraymodule-agnostic**: they will only work with
+        * :py:class:`~pyxu_xrt.operator.RayXRT` instances are **not arraymodule-agnostic**: they will only work with
           NDArrays belonging to the same array module as (`n_spec`, `t_spec`).
-        * :py:class:`~pyxu.operator.RayXRT` is **not** precision-agnostic: it will only work on NDArrays in
+          Dask arrays are currently not supported.
+        * :py:class:`~pyxu_xrt.operator.RayXRT` is **not** precision-agnostic: it will only work on NDArrays in
           single-precision. A warning is emitted if inputs must be cast.
         """
         super().__init__(
@@ -153,6 +158,8 @@ class RayXRT(pxa.LinOp):
             assert self._n_spec.chunks[1] == (
                 self.dim_rank,
             ), "[n_spec,t_spec] Chunking along last dimension unsupported."
+
+            raise NotImplementedError  # will change in a future release.
         else:  # init-time instantiation: create drjit variables
             self._dr = self._init_dr_metadata()
 
@@ -162,89 +169,14 @@ class RayXRT(pxa.LinOp):
         Parameters
         ----------
         arr: NDArray
-            (..., N1,...,ND) spatial weights.
+            (..., N1,...,ND) spatial weights :math:`\mathbf{\alpha}`.
 
         Returns
         -------
         out: NDArray
-            (..., N_ray) XRT samples.
+            (..., N_ray) XRT samples :math:`P[f_{\mathbf{\alpha}}]`.
         """
-        arr, dtype = self._cast_warn(arr)
-        ndi = pxd.NDArrayInfo.from_obj(arr)
-        xp = ndi.module()
-
-        if ndi == pxd.NDArrayInfo.DASK:
-            # High-level idea:
-            # 1. foreach (nt_spec, I-chunk) pair: compute projections.
-            # 2. collapse projections across all I-chunks.
-            #
-            # Concretely, we rely on DASK.blockwise() to achieve this.
-            #
-            # For each sub-problem to compute the right outputs, it must know "where" the I-chunk is located in space,
-            # i.e. what `origin` is for that chunk.  As such we need to encode the chunk origins as an array and give
-            # them to blockwise(). This is encoded in `origin` below.
-            #
-            # Reminder of array shape/block structures that blockwise() will use:
-            # [legend] array: shape, blocks/dim, dimension index {see blockwise().}]
-            # * I: (N1,...,ND), (Bi1,...,BiD), (1,...,D)
-            # * n_spec: (N_ray, D), (Bp, 1), (0, D+1)
-            # * t_spec: (N_ray, D), (Bp, 1), (0, D+1)
-            # * origin: (Bi1,...,BiD, D), (Bi1,...,BiD, 1), (1,...,D, D+2)
-            # * parts: [ this is the output of blockwise() ]
-            #       (N_ray, Bi1,...,BiD),
-            #       (Bp,    Bi1,...,BiD), -> we 'sumed' over the single-block axes (D+1, D+2)
-            #       ( 0,      1,...,  D)
-            # * out [ = parts.sum(axis=(-D,...,-1)) ]
-            #       (N_ray,), (Bp,)
-
-            # Compute `origin` info.
-            offset = [np.r_[0, chks].cumsum()[:-1] for chks in arr.chunks]
-            offset = np.stack(  # (Bi1,...,BiD, D)
-                np.meshgrid(*offset, indexing="ij"),
-                axis=-1,
-            )
-            origin = xp.asarray(  # (Bi1,...,BiD, D)
-                np.r_[self._origin] + np.r_[self._pitch] * offset,
-                chunks=(1,) * self.dim_rank + (self.dim_rank,),
-            )
-
-            # Compute (I,n,t,orig,o)_ind & output chunks
-            I_ind = tuple(range(1, self.dim_rank + 1))
-            n_ind = (0, self.dim_rank + 1)
-            t_ind = (0, self.dim_rank + 1)
-            orig_ind = (*range(1, self.dim_rank + 1), self.dim_rank + 2)
-            o_ind = tuple(range(self.dim_rank + 1))
-            o_chunks = {d: 1 for d in range(1, self.dim_rank + 1)}
-
-            parts = xp.blockwise(
-                # shape:  (N_ray | Bi1,...,BiD)
-                # bcount: (Bp    | Bi1,...,BiD)
-                *(self._blockwise_apply, o_ind),
-                *(arr, I_ind),
-                *(self._n_spec, n_ind),
-                *(self._t_spec, t_ind),
-                *(origin, orig_ind),
-                dtype=dtype,
-                adjust_chunks=o_chunks,
-                align_arrays=False,
-                concatenate=True,
-                meta=arr._meta,
-            )
-            out = parts.sum(axis=tuple(range(-self.dim_rank, 0)))  # (N_ray,)
-        else:  # NUMPY/CUPY
-            from . import _drjit as drh
-
-            # Load the right drjit function
-            drb = drh._load_dr_variant(ndi)
-            fwd, _ = drh._build_xrt(drb, D=self.dim_rank, weighted=False)
-
-            # Transform (I,) to drjit data structure
-            _I = arr.ravel()  # (N1*...*ND,) contiguous
-            I_dr = drb.Float(drh._xp2dr(_I))
-
-            # Compute projections
-            P = fwd(**self._dr, I=I_dr)
-            out = xp.asarray(P, dtype=dtype)
+        out = self._transform(arr, mode="fw", weighted=False)
         return out
 
     @pxrt.enforce_precision(i="arr")
@@ -253,34 +185,14 @@ class RayXRT(pxa.LinOp):
         Parameters
         ----------
         arr: NDArray
-            (..., N_ray) XRT samples.
+            (..., N_ray) XRT samples :math:`P[f_{\mathbf{\alpha}}]`.
 
         Returns
         -------
         out: NDArray
-            (..., N1,...,ND) spatial weights.
+            (..., N1,...,ND) back-projected spatial weights :math:`\mathbf{\alpha}`.
         """
-        arr, dtype = self._cast_warn(arr)
-        ndi = pxd.NDArrayInfo.from_obj(arr)
-        xp = ndi.module()
-
-        if ndi == pxd.NDArrayInfo.DASK:
-            raise NotImplementedError
-        else:  # NUMPY/CUPY
-            from . import _drjit as drh
-
-            # Load the right drjit function
-            drb = drh._load_dr_variant(ndi)
-            _, bwd = drh._build_xrt(drb, D=self.dim_rank, weighted=False)
-
-            # Transform (P,) to drjit data structure
-            P = arr.ravel()  # (N_ray,) contiguous
-            P_dr = drb.Float(drh._xp2dr(P))
-
-            # Compute back-projections
-            _I = bwd(**self._dr, P=P_dr)
-            _I = xp.asarray(_I, dtype=dtype)
-            out = _I.reshape(self.dim_shape)  # (N1,...,ND)
+        out = self._transform(arr, mode="bw", weighted=False)
         return out
 
     def asarray(self, **kwargs) -> pxt.NDArray:
@@ -327,7 +239,7 @@ class RayXRT(pxa.LinOp):
         .. plot::
 
            import numpy as np
-           import pyxu.operator as pxo
+           import pyxu_xrt.operator as pxo
 
            op = pxo.RayXRT(
                dim_shape=(5, 6),
@@ -522,40 +434,229 @@ class RayXRT(pxa.LinOp):
         )
         return meta
 
-    def _blockwise_apply(self, I, n_spec, t_spec, origin) -> pxt.NDArray:
-        # Project rays through sub-volume.
-        # [All arrays are NUMPY/CUPY.]
+    def _transform(self, x: pxt.NDArray, mode: str, weighted: bool) -> pxt.NDArray:
+        # Compute (un-)weighted XRT or back-projections.
         #
         # Parameters
         # ----------
-        # I: NDArray[float32]
-        #     (S1,...,SD) sub-volume entries.
-        # n_spec: NDArray[float32]
-        #     (L, D) ray directions :math:`\mathbf{n} \in \mathbb{S}^{D-1}`.
-        # t_spec: NDArray[float32]
-        #     (L, D) offset specifiers :math:`\mathbf{t} \in \mathbb{R}^{D}`.
-        # origin: NDArray[float]
-        #     (<D 1s>, D) bottom-left coordinate of sub-volume.
+        # x:   mode=fw -> (N1,...,ND) [NUMPY/CUPY/DASK]
+        #           bw -> (N_ray,)
         #
         # Returns
         # -------
-        # P: NDArray[float32]
-        #     (L, <D 1s>) projection weights.
-        #
-        #     [Note the trailing size-1 dims; these are required since blockwise() expects to
-        #      stack these outputs given how it was called.]
-        select = (0,) * self.dim_rank
-        origin = origin[*select]  # (D,)
+        # out: mode=fw -> (N_ray,)
+        #           bw -> (N1,...,ND)
+        from . import _drjit as drh
 
-        op = RayXRT(
-            dim_shape=I.shape,
+        ndi = pxd.NDArrayInfo.from_obj(x)
+        if ndi == pxd.NDArrayInfo.DASK:
+            raise NotImplementedError
+        xp = ndi.module()
+
+        # Load the right drjit function
+        drb = drh._load_dr_variant(ndi)
+        fwd, bwd = drh._build_xrt(drb, D=self.dim_rank, weighted=weighted)
+
+        x, dtype = self._cast_warn(x)
+        if mode == "fw":
+            # Transform (I,) to drjit data structure
+            _I = x.ravel()  # (N1*...*ND,) contiguous
+            I_dr = drb.Float(drh._xp2dr(_I))
+
+            # Compute projections
+            P = fwd(**self._dr, I=I_dr)
+            out = xp.asarray(P, dtype=dtype)
+        elif mode == "bw":
+            # Transform (P,) to drjit data structure
+            P = x.ravel()  # (N_ray,) contiguous
+            P_dr = drb.Float(drh._xp2dr(P))
+
+            # Compute back-projections
+            _I = bwd(**self._dr, P=P_dr)
+            _I = xp.asarray(_I, dtype=dtype)
+            out = _I.reshape(self.dim_shape)  # (N1,...,ND)
+        else:
+            raise NotImplementedError
+        return out
+
+
+class RayWXRT(RayXRT):
+    r"""
+    Weighted X-Ray Transform (for :math:`D = \{2, 3\}`).
+
+    The Weighted X-Ray Transform (WXRT) of a function :math:`f: \mathbb{R}^{D} \to \mathbb{R}` is defined as
+
+    .. math::
+
+        \mathcal{P}_{w}[f](\mathbf{n}, \mathbf{t})
+        =
+        \int_{\mathbb{R}} f(\mathbf{t} + \mathbf{n} \alpha)
+        \exp\left[ -\int_{-\infty}^{\alpha} w(\mathbf{t} + \mathbf{n} \beta) d\beta \right]
+        d\alpha,
+
+    where :math:`\mathbf{n}\in \mathbb{S}^{D-1}` and :math:`\mathbf{t} \in \mathbf{n}^{\perp}`.
+    :math:`\mathcal{P}_{w}[f]` hence denotes the set of *weighted line integrals* of :math:`f`.
+
+    This implementation computes samples of the WXRT using a ray-marching method based on the `Dr.Jit
+    <https://drjit.readthedocs.io/en/latest/reference.html>`_ compiler. It assumes :math:`(f,w)` are pixelized
+    image/volumes where:
+
+    * the lower-left element of :math:`(f,w)` are located at :math:`\mathbf{o} \in \mathbb{R}^{D}`,
+    * pixel dimensions are :math:`\mathbf{\Delta} \in \mathbb{R}_{+}^{D}`, i.e.
+
+    .. math::
+
+       \begin{align*}
+           f(\mathbf{r}) & = \sum_{\{\mathbf{q}\} \subset \mathbb{N}^{D}}
+                             \alpha_{\mathbf{q}}
+                             1_{[\mathbf{0}, \mathbf{\Delta}]}(\mathbf{r} - \mathbf{q} \odot \mathbf{\Delta} - \mathbf{o}),
+                             \quad
+                             \alpha_{\mathbf{q}} \in \mathbb{R}, \\
+           w(\mathbf{r}) & = \sum_{\{\mathbf{q}\} \subset \mathbb{N}^{D}}
+                             \gamma_{\mathbf{q}}
+                             1_{[\mathbf{0}, \mathbf{\Delta}]}(\mathbf{r} - \mathbf{q} \odot \mathbf{\Delta} - \mathbf{o}),
+                             \quad
+                             \gamma_{\mathbf{q}} \in \mathbb{R}.
+       \end{align*}
+
+    .. image:: /_static/api/xray/wxray_parametrization.svg
+       :alt: 2D weighted XRay Geometry
+       :width: 50%
+       :align: center
+
+    Notes
+    -----
+    * Using :py:class:`~pyxu_xrt.operator.RayWXRT` on the CPU requires LLVM.
+      See the `Dr.Jit documentation <https://drjit.readthedocs.io/en/latest/index.html>`_ for details.
+    * Using :py:class:`~pyxu_xrt.operator.RayWXRT` on the GPU requires installing Pyxu with GPU add-ons.
+      See the `Pyxu install guide
+      <https://pyxu-org.github.io/intro/installation.html#installation-with-optional-dependencies>`_ for details.
+    """
+
+    def __init__(
+        self,
+        dim_shape: pxt.NDArrayShape,
+        n_spec: pxt.NDArray,
+        t_spec: pxt.NDArray,
+        w_spec: pxt.NDArray,
+        origin: tuple[float] = 0,
+        pitch: tuple[float] = 1,
+        enable_warnings: bool = True,
+    ):
+        r"""
+        Parameters
+        ----------
+        dim_shape: NDArrayShape
+            (N1,...,ND) pixel count in each dimension.
+        n_spec: NDArray
+            (N_ray, D) ray directions :math:`\mathbf{n} \in \mathbb{S}^{D-1}`.
+        t_spec: NDArray
+            (N_ray, D) offset specifiers :math:`\mathbf{t} \in \mathbb{R}^{D}`.
+        w_spec: NDArray
+            (N1,...,ND) spatial decay weights :math:`\gamma \in \mathbb{R}`.
+        origin: float, tuple[float]
+            Bottom-left coordinate :math:`\mathbf{o} \in \mathbb{R}^{D}`.
+        pitch: float, tuple[float]
+            Pixel size :math:`\mathbf{\Delta} \in \mathbb{R}_{+}^{D}`.
+        enable_warnings: bool
+            If ``True``, emit a warning in case of precision mis-match issues.
+
+        Notes
+        -----
+        * :py:class:`~pyxu_xrt.operator.RayWXRT` instances are **not arraymodule-agnostic**: they will only work with
+          NDArrays belonging to the same array module as (`n_spec`, `t_spec`, `w_spec`).
+          Dask arrays are currently not supported.
+        * :py:class:`~pyxu_xrt.operator.RayWXRT` is **not** precision-agnostic: it will only work on NDArrays in
+          single-precision. A warning is emitted if inputs must be cast.
+        """
+        # Put all variables in canonical form & validate ----------------------
+        #   w_spec: (*dim_shape,) array[float32] (NUMPY/CUPY/DASK)
+        dim_shape = pxu.as_canonical_shape(dim_shape)
+        assert w_spec.shape == dim_shape
+        assert operator.eq(  # t_spec compliance tested in __init__() call below.
+            pxd.NDArrayInfo.from_obj(n_spec),
+            pxd.NDArrayInfo.from_obj(w_spec),
+        ), "[n_spec,t_spec,w_spec] Must belong to the same array backend."
+
+        # Initialize Operator Variables ---------------------------------------
+        xp = pxu.get_array_module(w_spec)
+        self._w_spec = xp.require(
+            w_spec,  # (N1,...,ND)
+            dtype=pxrt.Width.SINGLE.value,
+            requirements="C",  # allows zero-copy in _init_dr_metadata()
+        )
+        super().__init__(
+            dim_shape=dim_shape,
             n_spec=n_spec,
             t_spec=t_spec,
             origin=origin,
-            pitch=self._pitch,
-            enable_warnings=self._enable_warnings,
+            pitch=pitch,
+            enable_warnings=enable_warnings,
         )
-        P = op.apply(I)  # (L,)
 
-        expand = (np.newaxis,) * self.dim_rank
-        return P[..., *expand]  # (L, <D 1s>)
+        # Cheap analytical Lipschitz upper bound given by
+        #   \sigma_{\max}(P) <= \norm{P}{F},
+        # with
+        #   \norm{P}{F}^{2}
+        #   <= (max cell weight)^{2} * #non-zero elements
+        #    = (max cell weight)^{2} * N_ray * (maximum number of cells traversable by a ray)
+        #    = (max cell weight)^{2} * N_ray * \norm{arg_shape}{2}
+        #
+        #    (max cell weight) =
+        #        w_min > 0: \norm{pitch}{2}
+        #        w_min < 0: cannot infer
+        if w_spec.min() < 0:
+            max_cell_weight = np.inf
+        else:
+            max_cell_weight = np.linalg.norm(pitch)
+        self.lipschitz = max_cell_weight * np.sqrt(self.codim_size * np.linalg.norm(self.dim_shape))
+
+    @pxrt.enforce_precision(i="arr")
+    def apply(self, arr: pxt.NDArray) -> pxt.NDArray:
+        r"""
+        Parameters
+        ----------
+        arr: NDArray
+            (..., N1,...,ND) spatial weights :math:`\mathbf{\alpha}`.
+
+        Returns
+        -------
+        out: NDArray
+            (..., N_ray) WXRT samples :math:`P_{w}[f_{\mathbf{\alpha}}]`.
+        """
+        out = self._transform(arr, mode="fw", weighted=True)
+        return out
+
+    @pxrt.enforce_precision(i="arr")
+    def adjoint(self, arr: pxt.NDArray) -> pxt.NDArray:
+        r"""
+        Parameters
+        ----------
+        arr: NDArray
+            (..., N_ray) WXRT samples :math:`P_{w}[f_{\mathbf{\alpha}}]`.
+
+        Returns
+        -------
+        out: NDArray
+            (..., N1,...,ND) back-projected spatial weights :math:`\mathbf{\alpha}`.
+        """
+        out = self._transform(arr, mode="bw", weighted=True)
+        return out
+
+    # Internal Helpers --------------------------------------------------------
+    def _init_dr_metadata(self) -> dict:
+        # Compute all RayWXRT parameters.
+        #
+        # * o: (D,) Arrayf          [volume reference point]
+        # * pitch: (D,) Arrayf      [pixel pitch]
+        # * N: (D,) Arrayu          [pixel count]
+        # * r: (N_ray,) Rayf        [zero-copy view of (n_spec, t_spec)]
+        # * w: (N1*...*ND,) Float   [zero-copy view of (w_spec,)]
+        from . import _drjit as drh
+
+        ndi = pxd.NDArrayInfo.from_obj(self._n_spec)
+        drb = drh._load_dr_variant(ndi)
+
+        meta = super()._init_dr_metadata()
+        meta["w"] = drb.Float(drh._xp2dr(self._w_spec.ravel()))
+        return meta

@@ -1,6 +1,6 @@
 # Helper classes/functions related to RayXRT.
 #
-# These are low-level routines NOT meant to be imported by default via `import pyxu.operator`.
+# These are low-level routines NOT meant to be imported at the top-level.
 # Import this module when/where needed only.
 
 import types
@@ -299,9 +299,9 @@ def _build_xrt(drb: DrJitBackend, D: int, weighted: bool):
         return P
 
     def wxrt_apply(
-        o: drb.Array3f,
-        pitch: drb.Array3f,
-        N: drb.Array3u,
+        o: Arrayf,
+        pitch: Arrayf,
+        N: Arrayu,
         I: drb.Float,
         w: drb.Float,
         r: Rayf,
@@ -309,11 +309,11 @@ def _build_xrt(drb: DrJitBackend, D: int, weighted: bool):
         # Weighted X-Ray Forward-Projection.
         #
         # Parameters
-        #   o:     bottom-left coordinate of I[0,0,0]
+        #   o:     bottom-left coordinate of I[0,...,0]
         #   pitch: cell dimensions \in \bR_{+}
-        #   N:     (Nx,Ny,Nz) lattice size
-        #   I:     (Nx*Ny*Nz,) cell weights \in \bR [C-order]
-        #   w:     (Nx*Ny*Nz,) cell decay rates \in \bR [C-order]
+        #   N:     (D,) lattice size
+        #   I:     (N1*...*ND,) cell weights \in \bR [C-order]
+        #   w:     (N1*...*ND,) cell decay rates \in \bR [C-order]
         #   r:     (L,) ray descriptors
         # Returns
         #   P:     (L,) forward-projected samples \in \bR
@@ -324,15 +324,15 @@ def _build_xrt(drb: DrJitBackend, D: int, weighted: bool):
             o=(r.o - o) * ipitch,
             d=dr.normalize(r.d * ipitch),
         )
-        stride = drb.Array3u(N[1] * N[2], N[2], 1)
-        flat_index = lambda i: dr.dot(stride, drb.Array3u(i))  # Array3f (int-valued) -> UInt32
+        stride = Arrayu(N[1], 1) if (D == 2) else Arrayu(N[1] * N[2], N[2], 1)
+        flat_index = lambda i: dr.dot(stride, Arrayu(i))  # Arrayf (int-valued) -> UInt32
 
         L = max(dr.shape(r.o)[1], dr.shape(r.d)[1])
         P = dr.zeros(drb.Float, L)  # Forward-Projection samples
         d_acc = dr.zeros(drb.Float, L)  # Accumulated decay
 
         # Move (intersecting) rays to volume surface
-        bbox_vol = BoundingBoxf(drb.Array3f(0), drb.Array3f(N))
+        bbox_vol = BoundingBoxf(Arrayf(0), Arrayf(N))
         active, a1, a2 = bbox_vol.ray_intersect(r)
         a_min = dr.minimum(a1, a2)
         r.o.assign(dr.select(active, r(a_min), r.o))
@@ -424,9 +424,9 @@ def _build_xrt(drb: DrJitBackend, D: int, weighted: bool):
         return I
 
     def wxrt_adjoint(
-        o: drb.Array3f,
-        pitch: drb.Array3f,
-        N: drb.Array3u,
+        o: Arrayf,
+        pitch: Arrayf,
+        N: Arrayu,
         P: drb.Float,
         w: drb.Float,
         r: Rayf,
@@ -434,14 +434,14 @@ def _build_xrt(drb: DrJitBackend, D: int, weighted: bool):
         # Weighted X-Ray Back-Projection.
         #
         # Parameters
-        #   o:     bottom-left coordinate of I[0,0,0]
+        #   o:     bottom-left coordinate of I[0,...,0]
         #   pitch: cell dimensions \in \bR_{+}
-        #   N:     (Nx,Ny,Nz) lattice size
+        #   N:     (D,) lattice size
         #   P:     (L,) X-Ray samples \in \bR
-        #   w:     (Nx*Ny*Nz,) cell decay rates \in \bR [C-order]
+        #   w:     (N1*...*ND,) cell decay rates \in \bR [C-order]
         #   r:     (L,) ray descriptors
         # Returns
-        #   I:     (Nx*Ny*Nz,) back-projected samples \in \bR [C-order]
+        #   I:     (N1*...*ND,) back-projected samples \in \bR [C-order]
 
         # Go to normalized coordinates
         ipitch = dr.rcp(pitch)
@@ -449,15 +449,15 @@ def _build_xrt(drb: DrJitBackend, D: int, weighted: bool):
             o=(r.o - o) * ipitch,
             d=dr.normalize(r.d * ipitch),
         )
-        stride = drb.Array3u(N[1] * N[2], N[2], 1)
-        flat_index = lambda i: dr.dot(stride, drb.Array3u(i))  # Array3f (int-valued) -> UInt32
+        stride = Arrayu(N[1], 1) if (D == 2) else Arrayu(N[1] * N[2], N[2], 1)
+        flat_index = lambda i: dr.dot(stride, Arrayu(i))  # Array3f (int-valued) -> UInt32
 
         L = dr.shape(P)[0]
         I = dr.zeros(drb.Float, dr.prod(N)[0])  # noqa: E741 (Back-Projection samples)
         d_acc = dr.zeros(drb.Float, L)  # Accumulated decay
 
         # Move (intersecting) rays to volume surface
-        bbox_vol = BoundingBoxf(drb.Array3f(0), drb.Array3f(N))
+        bbox_vol = BoundingBoxf(Arrayf(0), Arrayf(N))
         active, a1, a2 = bbox_vol.ray_intersect(r)
         a_min = dr.minimum(a1, a2)
         r.o.assign(dr.select(active, r(a_min), r.o))
