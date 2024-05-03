@@ -68,8 +68,8 @@ class ReconstructionTechnique:
 
     def run(self, stop_crit=RelError(eps=1e-3) | MaxIter(200), post_process_optres=None, mu1=10, mu2=10):
         alpha = self.__run_epoch(self.initialisation, mu1=mu1, mu2=mu2, stop_crit=RelError(eps=1e-3) | MaxIter(50))
-        alpha = self.__run_epoch(alpha, mu1=mu1 / 2, mu2=mu2, stop_crit=RelError(eps=1e-3) | MaxIter(50))
-        alpha = self.__run_epoch(alpha, mu1=mu1 / 2, mu2=mu2 / 2, stop_crit=RelError(eps=1e-3) | MaxIter(50))
+        # alpha = self.__run_epoch(alpha, mu1=mu1 / 2, mu2=mu2, stop_crit=RelError(eps=1e-3) | MaxIter(50))
+        # alpha = self.__run_epoch(alpha, mu1=mu1 / 2, mu2=mu2 / 2, stop_crit=RelError(eps=1e-3) | MaxIter(50))
         # alpha = self.__run_epoch(alpha, mu1=mu1 / 4, mu2=mu2 / 2, stop_crit=RelError(eps=1e-5) | MaxIter(50))
         # alpha = self.__run_epoch(alpha, mu1=mu1 / 4, mu2=mu2 / 4, stop_crit=RelError(eps=1e-5) | MaxIter(50))
         # alpha = self.__run_epoch(alpha, mu1=mu1 / 8, mu2=mu2 / 4, stop_crit=RelError(eps=5e-6) | MaxIter(50))
@@ -129,7 +129,7 @@ print("Loading ground truth...")
 ground_truth = bunny_padded()
 chosen_gt = "bunny_padded"
 refraction = False
-diff_lip = 0.05
+diff_lip = 5
 
 xy_pixels = 100
 z_pixels = 100
@@ -241,8 +241,8 @@ def plot_four_images(imgs, subtitles, main_title, file_title, processing=None):
     plt.close(fig)
 
 
-def show_projection_against_gt(ax, data, ground_truth, main_title, file_title, processing=None, binary=False):
-    if not binary:
+def show_projection_against_gt(ax, data, ground_truth, main_title, file_title, processing=None, normalize=False):
+    if normalize:
         proj1 = np.sum(data, axis=ax) / data.shape[ax]
         proj2 = np.sum(ground_truth, axis=ax) / ground_truth.shape[ax]
     else:
@@ -260,7 +260,10 @@ def show_projection_against_gt(ax, data, ground_truth, main_title, file_title, p
     fig.suptitle(main_title, fontsize=16)
 
     for idx, a in enumerate(ax_flat):
-        im = a.imshow(processing[idx](imgs[idx]), cmap="Greys", vmin=0, vmax=1)
+        if normalize:
+            im = a.imshow(processing[idx](imgs[idx]), cmap="Greys", vmin=0, vmax=1)
+        else:
+            im = a.imshow(processing[idx](imgs[idx]), cmap="Greys")
         a.set_title(subtitles[idx])
         plt.colorbar(im, ax=a)
 
@@ -275,17 +278,17 @@ def run():
 
     show_projection_against_gt(0, img, ground_truth, f"{chosen_gt} x projection", f"results/{chosen_gt}_x_prog.png")
     show_projection_against_gt(
-        0, img, ground_truth, f"{chosen_gt} x projection", f"results/{chosen_gt}_x_prog_bin.png", binary=True
+        0, img, ground_truth, f"{chosen_gt} x projection", f"results/{chosen_gt}_x_prog_bin.png", normalize=False
     )
 
     show_projection_against_gt(1, img, ground_truth, f"{chosen_gt} y projection", f"results/{chosen_gt}_y_prog.png")
     show_projection_against_gt(
-        1, img, ground_truth, f"{chosen_gt} y projection", f"results/{chosen_gt}_y_prog_bin.png", binary=True
+        1, img, ground_truth, f"{chosen_gt} y projection", f"results/{chosen_gt}_y_prog_bin.png", normalize=False
     )
 
     show_projection_against_gt(2, img, ground_truth, f"{chosen_gt} z projection", f"results/{chosen_gt}_z_prog.png")
     show_projection_against_gt(
-        2, img, ground_truth, f"{chosen_gt} z projection", f"results/{chosen_gt}_z_prog_bin.png", binary=True
+        2, img, ground_truth, f"{chosen_gt} z projection", f"results/{chosen_gt}_z_prog_bin.png", normalize=False
     )
 
     low_index = int(np.ceil(img.shape[-1] * 0.25))
