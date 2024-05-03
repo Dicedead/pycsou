@@ -5,7 +5,7 @@ import numpy as np
 import skimage
 
 import pyxu.abc as pxa
-import pyxu.experimental.xray._xray as xray
+import pyxu.experimental.xray as xray
 import pyxu.info.ptype as pxt
 import pyxu.operator.linop.base as pxlb
 import pyxu.runtime as pxrt
