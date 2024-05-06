@@ -21,8 +21,8 @@ dh = 0.9
 dl = 0.5
 num_n = 1500  # 3000
 bin_size = 1
-slm_pixels_height = 50  # 100
-slm_pixels_width = 20  # 200
+slm_pixels_height = 100  # 100
+slm_pixels_width = 100  # 200
 lambda_ = 4
 
 
