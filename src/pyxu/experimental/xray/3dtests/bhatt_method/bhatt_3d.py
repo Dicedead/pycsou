@@ -24,6 +24,7 @@ bin_size = 1
 slm_pixels_height = 100  # 100
 slm_pixels_width = 100  # 200
 lambda_ = 4
+diff_lip = 0.05
 
 
 class BhattLoss(pxa.DiffFunc):
@@ -129,7 +130,6 @@ print("Loading ground truth...")
 ground_truth = bunny_padded()
 chosen_gt = "bunny_padded"
 refraction = False
-diff_lip = 5
 
 cylinder_inner_radius = 15.5e-3
 cylinder_outer_radius = 16.5e-3
