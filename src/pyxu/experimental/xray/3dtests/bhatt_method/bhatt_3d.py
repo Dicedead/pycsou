@@ -131,9 +131,6 @@ chosen_gt = "bunny_padded"
 refraction = False
 diff_lip = 5
 
-xy_pixels = 100
-z_pixels = 100
-
 cylinder_inner_radius = 15.5e-3
 cylinder_outer_radius = 16.5e-3
 cylinder_max_height = 0.0105216 * 3
@@ -164,7 +161,7 @@ n_spec = np.broadcast_to(n.reshape(num_n, 1, 3), (num_n, num_offsets, 3))  # (N_
 n_spec = np.tile(n_spec, num_heights).reshape((num_n * num_heights, num_offsets, 3))
 t_spec = t * t_offset.reshape(num_offsets, 1)
 t_spec[:, :, -1] = t[:, :, -1]
-t_spec += np.r_[pitch[:2], 0] * xy_pixels / 2
+t_spec += np.r_[pitch[:2], 0] * np.array(ground_truth.shape) / 2
 
 n_spec = n_spec.reshape(-1, 3)
 t_spec = t_spec.reshape(-1, 3)
@@ -241,7 +238,7 @@ def plot_four_images(imgs, subtitles, main_title, file_title, processing=None):
     plt.close(fig)
 
 
-def show_projection_against_gt(ax, data, ground_truth, main_title, file_title, processing=None, normalize=False):
+def show_projection_against_gt(ax, data, ground_truth, main_title, file_title, processing=None, normalize=True):
     if normalize:
         proj1 = np.sum(data, axis=ax) / data.shape[ax]
         proj2 = np.sum(ground_truth, axis=ax) / ground_truth.shape[ax]
