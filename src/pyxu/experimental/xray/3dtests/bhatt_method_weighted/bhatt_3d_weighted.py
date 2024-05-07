@@ -38,7 +38,7 @@ class BhattLossWeighted(pxa.DiffFunc):
         dl: pxt.Real = dl,
     ):
         super().__init__(dim_shape=xrt.codim_shape, codim_shape=(1,))
-        weights = 1 / np.maximum(1, ground_truth.sum(axis=(0, 1)))
+        weights = 1 / np.sqrt(np.maximum(1, ground_truth.sum(axis=(0, 1))))
         fg_argshift = -dh * ground_truth * weights
         bg_argshift = -dl * (1 - ground_truth) * weights  # TODO if we reweight later, this needs to change
         fg_constant = DiagonalOp(ground_truth)
