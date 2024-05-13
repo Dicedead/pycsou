@@ -38,15 +38,19 @@ class BhattLossWeighted(pxa.DiffFunc):
         dl: pxt.Real = dl,
     ):
         super().__init__(dim_shape=xrt.codim_shape, codim_shape=(1,))
-        weights = 1 / np.sqrt(np.maximum(1, ground_truth.sum(axis=(0, 1))))
-        fg_argshift = -dh * ground_truth * weights
-        bg_argshift = -dl * (1 - ground_truth) * weights  # TODO if we reweight later, this needs to change
+        weights = np.sqrt(ground_truth.sum(axis=(0, 1)))
+        weights = weights / np.sqrt((weights**2).sum())
+        weights = 1 - weights
+        weighting = DiagonalOp(np.ones(xrt.dim_shape) * weights)
+        fg_argshift = -dh * ground_truth
+        bg_argshift = -dl * (1 - ground_truth)
         fg_constant = DiagonalOp(ground_truth)
         bg_constant = DiagonalOp(1 - ground_truth)
-        fg_posort = PositiveOrthant(dim_shape=xrt.dim_shape).argshift(fg_argshift).moreau_envelope(mu1)
-        bg_posort = PositiveOrthant(dim_shape=xrt.dim_shape).argshift(bg_argshift).argscale(-1).moreau_envelope(mu1)
-        self._loss_fg = fg_posort * (fg_constant * xrt.T)
-        self._loss_bg = bg_posort * (bg_constant * xrt.T)
+        pos_orth = PositiveOrthant(dim_shape=xrt.dim_shape)
+        fg_posort = pos_orth.argshift(fg_argshift).moreau_envelope(mu1)
+        bg_posort = pos_orth.argshift(bg_argshift).argscale(-1).moreau_envelope(mu1)
+        self._loss_fg = fg_posort * (fg_constant * weighting * xrt.T)
+        self._loss_bg = bg_posort * (bg_constant * weighting * xrt.T)
         self._xrt = xrt
         self._fg_posort_times_constant = fg_posort * fg_constant
         self._bg_posort_times_constant = bg_posort * bg_constant
