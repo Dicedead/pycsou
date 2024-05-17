@@ -21,7 +21,7 @@ dh = 0.9
 dl = 0.5
 num_n = 1500  # 3000
 bin_size = 1
-slm_pixels_height = 20  # 100
+slm_pixels_height = 50  # 100
 slm_pixels_width = 100  # 200
 lambda_ = 0.4
 diff_lip = 0.5
@@ -73,10 +73,10 @@ class ReconstructionTechnique:
 
     def run(self, stop_crit=RelError(eps=1e-3) | MaxIter(200), post_process_optres=None, mu1=10, mu2=10):
         alpha = self.__run_epoch(self.initialisation, mu1=mu1, mu2=mu2, stop_crit=RelError(eps=1e-3) | MaxIter(50))
-        # alpha = self.__run_epoch(alpha, mu1=mu1 / 2, mu2=mu2, stop_crit=RelError(eps=1e-3) | MaxIter(50))
-        # alpha = self.__run_epoch(alpha, mu1=mu1 / 2, mu2=mu2 / 2, stop_crit=RelError(eps=1e-3) | MaxIter(50))
-        # alpha = self.__run_epoch(alpha, mu1=mu1 / 4, mu2=mu2 / 2, stop_crit=RelError(eps=1e-5) | MaxIter(50))
-        # alpha = self.__run_epoch(alpha, mu1=mu1 / 4, mu2=mu2 / 4, stop_crit=RelError(eps=1e-5) | MaxIter(50))
+        alpha = self.__run_epoch(alpha, mu1=mu1 / 2, mu2=mu2, stop_crit=RelError(eps=1e-3) | MaxIter(50))
+        alpha = self.__run_epoch(alpha, mu1=mu1 / 2, mu2=mu2 / 2, stop_crit=RelError(eps=1e-3) | MaxIter(50))
+        alpha = self.__run_epoch(alpha, mu1=mu1 / 4, mu2=mu2 / 2, stop_crit=RelError(eps=1e-5) | MaxIter(50))
+        alpha = self.__run_epoch(alpha, mu1=mu1 / 4, mu2=mu2 / 4, stop_crit=RelError(eps=1e-5) | MaxIter(50))
         # alpha = self.__run_epoch(alpha, mu1=mu1 / 8, mu2=mu2 / 4, stop_crit=RelError(eps=5e-6) | MaxIter(50))
         # alpha = self.__run_epoch(alpha, mu1=mu1 / 8, mu2=mu2 / 8, stop_crit=RelError(eps=5e-6) | MaxIter(50))
 
@@ -134,6 +134,7 @@ print("Loading ground truth...")
 ground_truth = bunny_padded()
 chosen_gt = "bunny_padded"
 refraction = False
+optimize_save = False
 
 cylinder_inner_radius = 15.5e-3
 cylinder_outer_radius = 16.5e-3
@@ -216,6 +217,14 @@ bhatt = ReconstructionTechnique(
 )
 
 
+def threshold_processing_2_colors(image):
+    thresh = (dh + dl) / 2
+    res = image.copy()
+    res[image < thresh] = 0
+    res[image >= thresh] = 1
+    return res
+
+
 def threshold_processing_3_colors(image):
     res = image.copy()
     res[image < dl] = 0
@@ -272,35 +281,76 @@ def show_projection_against_gt(ax, data, ground_truth, main_title, file_title, p
     plt.close(fig)
 
 
+def zero_order_interp(img: np.ndarray, epsilon=1e-6):
+    output = img.copy()
+    nonzero_planes = np.argwhere(img.sum(axis=(0, 1)) > epsilon).flatten()
+    nonzero_length = len(nonzero_planes) - 1
+    idx = 0
+    while idx < nonzero_length:
+        z = nonzero_planes[idx]
+        z_plus_1 = nonzero_planes[idx + 1]
+        output[:, :, z:z_plus_1] = output[:, :, z, np.newaxis]
+        idx += 1
+
+    return output, nonzero_planes
+
+
 def run():
     save_file = f"alphas/alpha_{chosen_gt}.zarr"
-    alpha, img = bhatt.run()
-    zarr.save(save_file, alpha)
+    if optimize_save:
+        alpha, img = bhatt.run()
+        zarr.save(save_file, alpha)
+    else:
+        alpha = zarr.load(save_file)
+        img = bhatt.op.adjoint(alpha)
 
-    show_projection_against_gt(0, img, ground_truth, f"{chosen_gt} x projection", f"results/{chosen_gt}_x_prog.png")
+    img, nonzero_planes = zero_order_interp(img)
+
     show_projection_against_gt(
-        0, img, ground_truth, f"{chosen_gt} x projection", f"results/{chosen_gt}_x_prog_bin.png", normalize=False
+        0, img, ground_truth, f"{chosen_gt} x projection", f"results/{chosen_gt}_x_prog_normalized.png"
+    )
+    show_projection_against_gt(
+        0, img, ground_truth, f"{chosen_gt} x projection", f"results/{chosen_gt}_x_prog.png", normalize=False
     )
 
-    show_projection_against_gt(1, img, ground_truth, f"{chosen_gt} y projection", f"results/{chosen_gt}_y_prog.png")
     show_projection_against_gt(
-        1, img, ground_truth, f"{chosen_gt} y projection", f"results/{chosen_gt}_y_prog_bin.png", normalize=False
+        1, img, ground_truth, f"{chosen_gt} y projection", f"results/{chosen_gt}_y_prog_normalized.png"
+    )
+    show_projection_against_gt(
+        1, img, ground_truth, f"{chosen_gt} y projection", f"results/{chosen_gt}_y_prog.png", normalize=False
     )
 
-    show_projection_against_gt(2, img, ground_truth, f"{chosen_gt} z projection", f"results/{chosen_gt}_z_prog.png")
     show_projection_against_gt(
-        2, img, ground_truth, f"{chosen_gt} z projection", f"results/{chosen_gt}_z_prog_bin.png", normalize=False
+        2, img, ground_truth, f"{chosen_gt} z projection", f"results/{chosen_gt}_z_prog_normalized.png"
+    )
+    show_projection_against_gt(
+        2, img, ground_truth, f"{chosen_gt} z projection", f"results/{chosen_gt}_z_prog.png", normalize=False
     )
 
-    low_index = int(np.ceil(img.shape[-1] * 0.25))
-    high_index = int(np.floor(img.shape[-1] * 0.75))
+    low_index = nonzero_planes[int(np.ceil(nonzero_planes.shape[-1] * 0.25))]
+    high_index = nonzero_planes[int(np.floor(nonzero_planes.shape[-1] * 0.75))]
 
     plot_four_images(
         [ground_truth[:, :, low_index], img[:, :, low_index], ground_truth[:, :, high_index], img[:, :, high_index]],
         subtitles=["Low GT", "Low data", "High GT", "High data"],
         main_title=f"{chosen_gt} slices",
-        file_title=f"results/{chosen_gt}_slices.png",
+        file_title=f"results/{chosen_gt}_slices_3col.png",
         processing=[lambda x: x, threshold_processing_3_colors, lambda x: x, threshold_processing_3_colors],
+    )
+
+    plot_four_images(
+        [ground_truth[:, :, low_index], img[:, :, low_index], ground_truth[:, :, high_index], img[:, :, high_index]],
+        subtitles=["Low GT", "Low data", "High GT", "High data"],
+        main_title=f"{chosen_gt} slices",
+        file_title=f"results/{chosen_gt}_slices_2col.png",
+        processing=[lambda x: x, threshold_processing_2_colors, lambda x: x, threshold_processing_2_colors],
+    )
+
+    plot_four_images(
+        [ground_truth[:, :, low_index], img[:, :, low_index], ground_truth[:, :, high_index], img[:, :, high_index]],
+        subtitles=["Low GT", "Low data", "High GT", "High data"],
+        main_title=f"{chosen_gt} slices",
+        file_title=f"results/{chosen_gt}_slices_energy.png",
     )
 
 
