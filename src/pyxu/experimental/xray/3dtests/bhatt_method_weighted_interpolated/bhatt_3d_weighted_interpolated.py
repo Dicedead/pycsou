@@ -51,7 +51,7 @@ class BhattLossWeighted(pxa.DiffFunc):
         fg_posort = pos_orth.argshift(fg_argshift).moreau_envelope(mu1)
         bg_posort = pos_orth.argshift(bg_argshift).argscale(-1).moreau_envelope(mu1)
         s = Stencil(
-            dim_shape=xrt.dim_shape, kernel=[np.r_[1], np.r_[1], np.r_[1, 1, 1, 1]], center=[0, 0, 3]  # TODO generalize
+            dim_shape=xrt.dim_shape, kernel=[np.r_[1], np.r_[1], np.r_[1, 1, 1]], center=[0, 0, 2]  # TODO generalize
         )
         self._inner_op = (fg_posort * fg_constant + bg_posort * bg_constant) * weighting * s * xrt.T
         self._xrt = xrt
@@ -144,7 +144,7 @@ cylinder_min_height = 0
 assert cylinder_inner_radius < cylinder_outer_radius
 
 origin = 0
-vox_side = 1  # 13.7e-5
+vox_side = 13.7e-5
 max_height = cylinder_max_height
 max_offset = cylinder_outer_radius / 10
 pitch = vox_side * np.array([1.0, 1.0, 1.0])
