@@ -144,7 +144,7 @@ cylinder_min_height = 0
 assert cylinder_inner_radius < cylinder_outer_radius
 
 origin = 0
-vox_side = 13.7e-5
+vox_side = 1  # 13.7e-5
 max_height = cylinder_max_height
 max_offset = cylinder_outer_radius / 10
 pitch = vox_side * np.array([1.0, 1.0, 1.0])
@@ -305,7 +305,7 @@ def run():
         alpha = zarr.load(save_file)
         img = bhatt.op.adjoint(alpha)
 
-    img, nonzero_planes = zero_order_interp(img)
+    copy, nonzero_planes = zero_order_interp(img)
 
     show_projection_against_gt(
         0, img, ground_truth, f"{chosen_gt} x projection", f"results/{chosen_gt}_x_prog_normalized.png"
