@@ -205,8 +205,8 @@ unweighted_xrt = xray.RayXRT(
 )
 
 print("Diagnostic plot...")
-fig = unweighted_xrt.diagnostic_plot()
-fig.savefig("./diag.png")
+# fig = unweighted_xrt.diagnostic_plot()
+# fig.savefig("./diag.png")
 
 bhatt = ReconstructionTechnique(
     ground_truth=ground_truth,
