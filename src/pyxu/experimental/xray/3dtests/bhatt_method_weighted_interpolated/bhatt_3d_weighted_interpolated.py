@@ -20,11 +20,11 @@ warnings.filterwarnings("ignore")
 
 dh = 0.9
 dl = 0.5
-num_n = 1500  # 3000
+num_n = 3000  # 3000
 bin_size = 1
 slm_pixels_height = 50  # 100
 slm_pixels_width = 100  # 200
-lambda_ = 0.4
+lambda_ = 4
 diff_lip = 0.5
 
 
@@ -50,9 +50,8 @@ class BhattLossWeighted(pxa.DiffFunc):
         pos_orth = PositiveOrthant(dim_shape=xrt.dim_shape)
         fg_posort = pos_orth.argshift(fg_argshift).moreau_envelope(mu1)
         bg_posort = pos_orth.argshift(bg_argshift).argscale(-1).moreau_envelope(mu1)
-        s = Stencil(
-            dim_shape=xrt.dim_shape, kernel=[np.r_[1], np.r_[1], np.r_[1, 1, 1]], center=[0, 0, 2]  # TODO generalize
-        )
+        nb_ones = int(np.ceil(ground_truth.shape[-1] / slm_pixels_height))
+        s = Stencil(dim_shape=xrt.dim_shape, kernel=[np.r_[1], np.r_[1], np.ones(nb_ones)], center=[0, 0, nb_ones - 1])
         self._inner_op = (fg_posort * fg_constant + bg_posort * bg_constant) * weighting * s * xrt.T
         self._xrt = xrt
         self._reg = lambda_ * PositiveOrthant(xrt.codim_shape).moreau_envelope(mu2)
@@ -135,16 +134,16 @@ print("Loading ground truth...")
 ground_truth = bunny_padded()
 chosen_gt = "bunny_padded"
 refraction = False
-optimize_save = True
+optimize_save = False
 
-cylinder_inner_radius = 15.5e-3
-cylinder_outer_radius = 16.5e-3
-cylinder_max_height = 0.0105216 * 3
+cylinder_inner_radius = 155  # 15.5e-3
+cylinder_outer_radius = 165  # 16.5e-3
+cylinder_max_height = 0.0105216 * 3 * 1e4  # 0.0105216 * 3
 cylinder_min_height = 0
 assert cylinder_inner_radius < cylinder_outer_radius
 
 origin = 0
-vox_side = 13.7e-5
+vox_side = 1  # 13.7e-5
 max_height = cylinder_max_height
 max_offset = cylinder_outer_radius / 10
 pitch = vox_side * np.array([1.0, 1.0, 1.0])
@@ -305,7 +304,7 @@ def run():
         alpha = zarr.load(save_file)
         img = bhatt.op.adjoint(alpha)
 
-    copy, nonzero_planes = zero_order_interp(img)
+    img, nonzero_planes = zero_order_interp(img)
 
     show_projection_against_gt(
         0, img, ground_truth, f"{chosen_gt} x projection", f"results/{chosen_gt}_x_prog_normalized.png"
