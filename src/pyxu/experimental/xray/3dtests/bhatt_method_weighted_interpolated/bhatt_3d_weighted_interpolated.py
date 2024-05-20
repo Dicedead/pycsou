@@ -24,7 +24,7 @@ num_n = 1500  # 3000
 bin_size = 1
 slm_pixels_height = 50  # 100
 slm_pixels_width = 100  # 200
-lambda_ = 0.4
+lambda_ = 4
 diff_lip = 0.5
 
 
@@ -136,29 +136,25 @@ chosen_gt = "bunny_padded"
 refraction = False
 optimize_save = True
 
-cylinder_inner_radius = 15.5e-3
-cylinder_outer_radius = 16.5e-3
-cylinder_max_height = 0.0105216 * 3
-cylinder_min_height = 0
-assert cylinder_inner_radius < cylinder_outer_radius
-
 origin = 0
-vox_side = 13.7e-6
-max_height = cylinder_max_height
-max_offset = cylinder_outer_radius / 10
-pitch = vox_side * np.array([1.0, 1.0, 10])
+pitch = np.array([1.0, 1.0, 10])
 
 print("Creating rays...")
 num_heights = slm_pixels_height // bin_size
 num_offsets = slm_pixels_width // bin_size
 
+side = np.array(ground_truth.shape)
+max_height = ground_truth.shape[-1]
 angle = np.linspace(0, 2 * np.pi, num_n, endpoint=False)
-heights = np.linspace(0.0000001 + cylinder_min_height, max_height, num_heights, endpoint=False)
-t_offset = np.linspace(-max_offset, max_offset, num_offsets, endpoint=True)
+heights = np.linspace(0.0000001, max_height, num_heights, endpoint=False)
+t_max = pitch * side / 2
+t_max = t_max[:-1]
+max_t_max = np.max(t_max)
+t_offset = np.linspace(-max_t_max, max_t_max, num_offsets, endpoint=False)
 
 n = np.stack([np.cos(angle), np.sin(angle), np.zeros(num_n)], axis=1)
 t = n[:, [1, 0]] * np.r_[-1, 1]  # <n, t> = 0
-t = np.tile(t, len(heights)).reshape(-1, 2)
+t = np.tile(t, num_heights).reshape(-1, 2)
 heights = np.tile(heights, num_n).reshape(-1, 1)
 t = np.hstack([t, heights]).reshape(num_n * num_heights, 1, 3)
 
