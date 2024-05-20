@@ -143,7 +143,7 @@ cylinder_min_height = 0
 assert cylinder_inner_radius < cylinder_outer_radius
 
 origin = 0
-vox_side = 5e-3  # 13.7e-5
+vox_side = 9e-3  # 13.7e-5
 max_height = cylinder_max_height
 max_offset = cylinder_outer_radius / 10
 pitch = vox_side * np.array([1.0, 1.0, 1.0])
@@ -327,8 +327,16 @@ def run():
         2, img, ground_truth, f"{chosen_gt} z projection", f"results/{chosen_gt}_z_prog.png", normalize=False
     )
 
-    low_index = nonzero_planes[int(np.ceil(nonzero_planes.shape[-1] * 0.25))]
-    high_index = nonzero_planes[int(np.floor(nonzero_planes.shape[-1] * 0.75))]
+    low_index = (
+        int(np.ceil(ground_truth.shape[-1] * 0.25))
+        if len(nonzero_planes) == 0
+        else nonzero_planes[int(np.ceil(nonzero_planes.shape[-1] * 0.25))]
+    )
+    high_index = (
+        int(np.ceil(ground_truth.shape[-1] * 0.75))
+        if len(nonzero_planes) == 0
+        else nonzero_planes[int(np.floor(nonzero_planes.shape[-1] * 0.75))]
+    )
 
     plot_four_images(
         [ground_truth[:, :, low_index], img[:, :, low_index], ground_truth[:, :, high_index], img[:, :, high_index]],
