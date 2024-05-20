@@ -137,7 +137,7 @@ refraction = False
 optimize_save = True
 
 origin = 0
-pitch = np.array([1.0, 1.0, 10])
+pitch = np.array([1.0, 1.0, 1.0])
 
 print("Creating rays...")
 num_heights = slm_pixels_height // bin_size
