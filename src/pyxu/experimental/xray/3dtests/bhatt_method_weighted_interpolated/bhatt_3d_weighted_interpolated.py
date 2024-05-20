@@ -143,10 +143,10 @@ cylinder_min_height = 0
 assert cylinder_inner_radius < cylinder_outer_radius
 
 origin = 0
-vox_side = 13.7e-5
+vox_side = 13.7e-6
 max_height = cylinder_max_height
 max_offset = cylinder_outer_radius / 10
-pitch = vox_side * np.array([1.0, 1.0, 1.0])
+pitch = vox_side * np.array([1.0, 1.0, 10])
 
 print("Creating rays...")
 num_heights = slm_pixels_height // bin_size
@@ -205,8 +205,8 @@ unweighted_xrt = xray.RayXRT(
 )
 
 print("Diagnostic plot...")
-# fig = unweighted_xrt.diagnostic_plot()
-# fig.savefig("./diag.png")
+fig = unweighted_xrt.diagnostic_plot()
+fig.savefig("./diag.png")
 
 bhatt = ReconstructionTechnique(
     ground_truth=ground_truth,
