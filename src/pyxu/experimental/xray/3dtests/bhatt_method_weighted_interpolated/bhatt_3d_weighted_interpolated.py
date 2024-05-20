@@ -134,7 +134,7 @@ print("Loading ground truth...")
 ground_truth = bunny_padded()
 chosen_gt = "bunny_padded"
 refraction = False
-optimize_save = False
+optimize_save = True
 
 cylinder_inner_radius = 155  # 15.5e-3
 cylinder_outer_radius = 165  # 16.5e-3
