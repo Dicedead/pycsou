@@ -20,11 +20,11 @@ warnings.filterwarnings("ignore")
 
 dh = 0.9
 dl = 0.5
-num_n = 3000  # 3000
+num_n = 1500  # 3000
 bin_size = 1
 slm_pixels_height = 50  # 100
 slm_pixels_width = 100  # 200
-lambda_ = 4
+lambda_ = 0.4
 diff_lip = 0.5
 
 
@@ -136,14 +136,14 @@ chosen_gt = "bunny_padded"
 refraction = False
 optimize_save = True
 
-cylinder_inner_radius = 155  # 15.5e-3
-cylinder_outer_radius = 165  # 16.5e-3
-cylinder_max_height = 0.0105216 * 3 * 1e4  # 0.0105216 * 3
+cylinder_inner_radius = 15.5e-3
+cylinder_outer_radius = 16.5e-3
+cylinder_max_height = 0.0105216 * 3
 cylinder_min_height = 0
 assert cylinder_inner_radius < cylinder_outer_radius
 
 origin = 0
-vox_side = 9e-3  # 13.7e-5
+vox_side = 13.7e-5
 max_height = cylinder_max_height
 max_offset = cylinder_outer_radius / 10
 pitch = vox_side * np.array([1.0, 1.0, 1.0])
