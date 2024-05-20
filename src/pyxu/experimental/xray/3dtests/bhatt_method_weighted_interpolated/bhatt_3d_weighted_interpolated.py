@@ -25,7 +25,7 @@ bin_size = 1
 slm_pixels_height = 50  # 100
 slm_pixels_width = 100  # 200
 lambda_ = 4
-diff_lip = 0.5
+diff_lip = 500
 
 
 class BhattLossWeighted(pxa.DiffFunc):
