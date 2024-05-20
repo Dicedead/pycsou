@@ -14,7 +14,7 @@
     "filters": null,
     "order": "C",
     "shape": [
-        7500000
+        15000000
     ],
     "zarr_format": 2
 }
