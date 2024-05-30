@@ -9,12 +9,11 @@ import pyxu.abc as pxa
 import pyxu.info.ptype as pxt
 import pyxu.operator.linop.xrt.ray as xray
 from pyxu.abc import ProxFunc
+from pyxu.experimental.xray.refraction import normalize, refract
 from pyxu.operator import DiagonalOp, PositiveOrthant
 from pyxu.operator.linop.stencil.stencil import Stencil
 from pyxu.opt.solver import PGD
 from pyxu.opt.stop import MaxIter, RelError
-
-# from pyxu.experimental.xray.refraction import refract, normalize
 
 warnings.filterwarnings("ignore")
 
@@ -26,6 +25,8 @@ slm_pixels_height = 50  # 100
 slm_pixels_width = 100  # 200
 lambda_ = 40
 diff_lip = 500_000
+weighted_heavy = False
+transmittance_ratio = 0.5 if weighted_heavy else 0.95
 
 
 class BhattLossWeighted(pxa.DiffFunc):
@@ -112,9 +113,9 @@ def ellipsis(side_a, num_a, side_b, num_b):
 
 
 def absorption_coeff(sides, transmittance_ratio):
-    assert len(sides) == 2
+    assert len(sides) == 3
     sides = pitch * sides
-    return -np.log(transmittance_ratio) * np.sum(sides) / (2 * np.prod(sides))
+    return -np.log(transmittance_ratio) * np.sum(sides) / (3 * np.prod(sides))
 
 
 def nut_padded(path="../npys/nut_padded_150.zarr"):
@@ -126,9 +127,12 @@ def bunny_padded(path="../npys/bunny_zres_150_padded.npy"):
 
 
 print("Loading ground truth...")
-ground_truth = nut_padded()
-chosen_gt = "nut_padded"
+ground_truth = bunny_padded()
+chosen_gt = "bunny_padded"
 refraction = False
+weighted = True
+chosen_gt = chosen_gt + "_weighted" if weighted else chosen_gt
+chosen_gt = chosen_gt + "_refracted" if refraction else chosen_gt
 optimize_save = True
 
 origin = 0
@@ -162,48 +166,49 @@ t_spec += np.r_[pitch[:2], 0] * np.array(ground_truth.shape) / 2
 n_spec = n_spec.reshape(-1, 3)
 t_spec = t_spec.reshape(-1, 3)
 
-# if refraction:
-#     possible_folders = [f"{x}_with_refraction" for x in possible_folders]
-#     folder = possible_folders[idx_chosen]
-#
-#     external_diameter = 5 * 2 * max(t_max) + 10
-#
-#     c_spec = [1, external_diameter, 0, 10, 0, 10]
-#     r_spec = [1, 1.4, 1.45]
-#
-#     t_spec -= 3 * external_diameter * n_spec
-#
-#     n_spec, t_spec = refract(
-#         np.pad(n_spec.reshape(-1, 2), pad_width=[(0, 0), (0, 1)], constant_values=0),
-#         np.pad(t_spec.reshape(-1, 2), pad_width=[(0, 0), (0, 1)], constant_values=5),
-#         r_spec,
-#         c_spec,
-#     )
-#     n_spec = n_spec[~np.isnan(n_spec)]
-#     t_spec = t_spec[~np.isnan(t_spec)]
-#     n_spec = normalize(n_spec.reshape(-1, 3)[:, :2])
-#     t_spec = t_spec.reshape(-1, 3)[:, :2]
+if refraction:
+    external_diameter = 5 * 2 * max(side[0], side[1]) + 10
 
-# w_spec = absorption_coeff(side, transmittance_ratio) * ellipsis(pitch * side[1], side[1], pitch * side[0], side[0])
+    c_spec = [1, external_diameter, 0, side[-1], 0, side[-1]]
+    r_spec = [1, 1.4, 1.45]
+
+    t_spec -= 3 * external_diameter * n_spec
+
+    n_spec, t_spec = refract(n_spec.reshape(-1, 3), t_spec.reshape(-1, 3), r_spec, c_spec)
+    n_spec = n_spec[~np.isnan(n_spec.sum(axis=-1))]
+    t_spec = t_spec[~np.isnan(t_spec.sum(axis=-1))]
+    n_spec = normalize(n_spec)
+
+if weighted:
+    w_spec = absorption_coeff(side, transmittance_ratio) * ellipsis(
+        pitch[1] * side[1], side[1], pitch[0] * side[0], side[0]
+    )
+    w_spec = w_spec[:, :, np.newaxis] * np.ones(shape=(1, 1, side[-1]))
 
 print("Building operator...")
-unweighted_xrt = xray.RayXRT(
-    dim_shape=ground_truth.shape,
-    origin=origin,
-    pitch=pitch,
-    n_spec=n_spec,
-    t_spec=t_spec,
+xrt = (
+    xray.RayXRT(
+        dim_shape=ground_truth.shape,
+        origin=origin,
+        pitch=pitch,
+        n_spec=n_spec,
+        t_spec=t_spec,
+    )
+    if not weighted
+    else xray.RayWXRT(
+        dim_shape=ground_truth.shape, origin=origin, pitch=pitch, n_spec=n_spec, t_spec=t_spec, w_spec=w_spec
+    )
 )
 
 print("Diagnostic plot...")
-# fig = unweighted_xrt.diagnostic_plot()
-# fig.savefig("./diag.png")
+fig = xrt.diagnostic_plot()
+fig.savefig("./diag.png")
 
 bhatt = ReconstructionTechnique(
     ground_truth=ground_truth,
-    op=unweighted_xrt,
-    regularizer=PositiveOrthant(unweighted_xrt.codim_shape),
-    initialisation=np.zeros(unweighted_xrt.codim_shape),
+    op=xrt,
+    regularizer=PositiveOrthant(xrt.codim_shape),
+    initialisation=np.zeros(xrt.codim_shape),
     diff_lip=diff_lip,
 )
 
