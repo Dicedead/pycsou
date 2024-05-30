@@ -201,8 +201,8 @@ xrt = (
 )
 
 print("Diagnostic plot...")
-fig = xrt.diagnostic_plot()
-fig.savefig("./diag.png")
+# fig = xrt.diagnostic_plot()
+# fig.savefig("./diag.png")
 
 bhatt = ReconstructionTechnique(
     ground_truth=ground_truth,
