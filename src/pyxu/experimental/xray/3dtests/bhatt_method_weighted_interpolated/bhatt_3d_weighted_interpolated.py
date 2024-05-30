@@ -25,7 +25,7 @@ bin_size = 1
 slm_pixels_height = 50  # 100
 slm_pixels_width = 100  # 200
 lambda_ = 40
-diff_lip = 500000
+diff_lip = 500_000
 
 
 class BhattLossWeighted(pxa.DiffFunc):
@@ -117,20 +117,8 @@ def absorption_coeff(sides, transmittance_ratio):
     return -np.log(transmittance_ratio) * np.sum(sides) / (2 * np.prod(sides))
 
 
-def nut(path="../npys/nut_zres100.npy"):
-    return 1 * np.load(path)
-
-
-def bunny(path="../npys/bunny_zres_100.npy"):
-    return 1 * np.load(path)
-
-
-def bunny_reweighted(path="../npys/bunny_zres_100_reweighted.npy"):
-    return 1 * np.load(path)
-
-
-def benchy(path="../npys/benchy_zres_200.npy"):
-    return 1 * np.load(path)
+def nut_padded(path="../npys/nut_padded_150.zarr"):
+    return 1 * zarr.load(path)
 
 
 def bunny_padded(path="../npys/bunny_zres_150_padded.npy"):
@@ -138,8 +126,8 @@ def bunny_padded(path="../npys/bunny_zres_150_padded.npy"):
 
 
 print("Loading ground truth...")
-ground_truth = bunny_padded()
-chosen_gt = "bunny_padded"
+ground_truth = nut_padded()
+chosen_gt = "nut_padded"
 refraction = False
 optimize_save = True
 
@@ -305,29 +293,53 @@ def run():
         zarr.save(save_file, alpha)
     else:
         alpha = zarr.load(save_file)
-        img = bhatt.op.adjoint(alpha)
+        img = bhatt.op.adjoint(alpha.clip(0, None))
 
     img, nonzero_planes = zero_order_interp(img)
 
     show_projection_against_gt(
-        0, img, ground_truth, f"{chosen_gt} x projection", f"results/{chosen_gt}_x_prog_normalized.png"
+        0, img, ground_truth, f"{chosen_gt} x projection", f"results/{chosen_gt}/x_prog_normalized.png"
     )
     show_projection_against_gt(
-        0, img, ground_truth, f"{chosen_gt} x projection", f"results/{chosen_gt}_x_prog.png", normalize=False
+        0, img, ground_truth, f"{chosen_gt} x projection", f"results/{chosen_gt}/x_prog.png", normalize=False
+    )
+    show_projection_against_gt(
+        0,
+        threshold_processing_2_colors(img),
+        ground_truth,
+        f"{chosen_gt} x projection",
+        f"results/{chosen_gt}/x_prog_binarized.png",
+        normalize=False,
     )
 
     show_projection_against_gt(
-        1, img, ground_truth, f"{chosen_gt} y projection", f"results/{chosen_gt}_y_prog_normalized.png"
+        1, img, ground_truth, f"{chosen_gt} y projection", f"results/{chosen_gt}/y_prog_normalized.png"
     )
     show_projection_against_gt(
-        1, img, ground_truth, f"{chosen_gt} y projection", f"results/{chosen_gt}_y_prog.png", normalize=False
+        1, img, ground_truth, f"{chosen_gt} y projection", f"results/{chosen_gt}/y_prog.png", normalize=False
+    )
+    show_projection_against_gt(
+        1,
+        threshold_processing_2_colors(img),
+        ground_truth,
+        f"{chosen_gt} y projection",
+        f"results/{chosen_gt}/y_prog_binarized.png",
+        normalize=False,
     )
 
     show_projection_against_gt(
-        2, img, ground_truth, f"{chosen_gt} z projection", f"results/{chosen_gt}_z_prog_normalized.png"
+        2, img, ground_truth, f"{chosen_gt} z projection", f"results/{chosen_gt}/z_prog_normalized.png"
     )
     show_projection_against_gt(
-        2, img, ground_truth, f"{chosen_gt} z projection", f"results/{chosen_gt}_z_prog.png", normalize=False
+        2, img, ground_truth, f"{chosen_gt} z projection", f"results/{chosen_gt}/z_prog.png", normalize=False
+    )
+    show_projection_against_gt(
+        2,
+        threshold_processing_2_colors(img),
+        ground_truth,
+        f"{chosen_gt} z projection",
+        f"results/{chosen_gt}/z_prog_binarized.png",
+        normalize=False,
     )
 
     low_index = (
@@ -345,7 +357,7 @@ def run():
         [ground_truth[:, :, low_index], img[:, :, low_index], ground_truth[:, :, high_index], img[:, :, high_index]],
         subtitles=["Low GT", "Low data", "High GT", "High data"],
         main_title=f"{chosen_gt} slices",
-        file_title=f"results/{chosen_gt}_slices_3col.png",
+        file_title=f"results/{chosen_gt}/slices_3col.png",
         processing=[lambda x: x, threshold_processing_3_colors, lambda x: x, threshold_processing_3_colors],
     )
 
@@ -353,7 +365,7 @@ def run():
         [ground_truth[:, :, low_index], img[:, :, low_index], ground_truth[:, :, high_index], img[:, :, high_index]],
         subtitles=["Low GT", "Low data", "High GT", "High data"],
         main_title=f"{chosen_gt} slices",
-        file_title=f"results/{chosen_gt}_slices_2col.png",
+        file_title=f"results/{chosen_gt}/slices_2col.png",
         processing=[lambda x: x, threshold_processing_2_colors, lambda x: x, threshold_processing_2_colors],
     )
 
@@ -361,7 +373,7 @@ def run():
         [ground_truth[:, :, low_index], img[:, :, low_index], ground_truth[:, :, high_index], img[:, :, high_index]],
         subtitles=["Low GT", "Low data", "High GT", "High data"],
         main_title=f"{chosen_gt} slices",
-        file_title=f"results/{chosen_gt}_slices_energy.png",
+        file_title=f"results/{chosen_gt}/slices_energy.png",
     )
 
 

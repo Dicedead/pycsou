@@ -2,6 +2,7 @@ import imageio.v3 as iio
 import numpy as np
 import stltovoxel
 import tqdm
+import zarr
 from matplotlib import pyplot as plt
 
 
@@ -29,7 +30,7 @@ def read_stl_file(stl_path, png_path, npy_path, resolution=100, reweighting=True
         summation = array.sum(axis=(1, 2), keepdims=True)
         array = array / np.maximum(np.ones_like(summation), np.sqrt(summation))
 
-    np.save(npy_path, array)
+    zarr.save(npy_path, array)
 
 
 def show_voxels(npy_path, image_path):
@@ -41,10 +42,10 @@ def show_voxels(npy_path, image_path):
 
 
 if __name__ == "__main__":
-    stl_path = "stls/Bunny-LowPoly.stl"
-    png_path = "pngs/bunny_zres_150_"
-    npy_path = "npys/bunny_zres_150.npy"
-    image_path = "images/bunny_zres_150.png"
+    stl_path = "stls/nut_big.stl"
+    png_path = "pngs/nut_padded_150_"
+    npy_path = "npys/nut_padded_150.zarr"
+    image_path = "images/nut_padded_150.png"
     resolution = 150
     reweight = False
 
@@ -54,6 +55,6 @@ if __name__ == "__main__":
         npy_path=npy_path,
         resolution=resolution,
         reweighting=reweight,
-        pad_width=0,
+        pad_width=30,
     )
     # show_voxels(npy_path=npy_path, image_path=image_path)
