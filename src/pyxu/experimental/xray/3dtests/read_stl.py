@@ -42,10 +42,10 @@ def show_voxels(npy_path, image_path):
 
 
 if __name__ == "__main__":
-    stl_path = "stls/nut_big.stl"
-    png_path = "pngs/nut_padded_150_"
-    npy_path = "npys/nut_padded_150.zarr"
-    image_path = "images/nut_padded_150.png"
+    stl_path = "stls/Iron_Throne_Benchy.stl"
+    png_path = "pngs/benchy_padded_150"
+    npy_path = "npys/benchy_padded_150.zarr"
+    image_path = "images/benchy_padded_150.png"
     resolution = 150
     reweight = False
 

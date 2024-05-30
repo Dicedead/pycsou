@@ -118,6 +118,10 @@ def absorption_coeff(sides, transmittance_ratio):
     return -np.log(transmittance_ratio) * np.sum(sides) / (3 * np.prod(sides))
 
 
+def benchy_padded(path="../npys/benchy_padded_150.zarr"):
+    return 1 * zarr.load(path)
+
+
 def nut_padded(path="../npys/nut_padded_150.zarr"):
     return 1 * zarr.load(path)
 
@@ -127,9 +131,9 @@ def bunny_padded(path="../npys/bunny_zres_150_padded.npy"):
 
 
 print("Loading ground truth...")
-ground_truth = bunny_padded()
-chosen_gt = "bunny_padded"
-refraction = True
+ground_truth = benchy_padded()
+chosen_gt = "benchy_padded"
+refraction = False
 weighted = True
 chosen_gt = chosen_gt + "_weighted" if weighted else chosen_gt
 chosen_gt = chosen_gt + "_refracted" if refraction else chosen_gt
