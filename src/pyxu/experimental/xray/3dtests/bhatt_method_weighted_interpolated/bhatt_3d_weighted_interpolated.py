@@ -25,7 +25,7 @@ slm_pixels_height = 50  # 100
 slm_pixels_width = 100  # 200
 lambda_ = 40
 diff_lip = 500_000
-weighted_heavy = False
+weighted_heavy = True
 transmittance_ratio = 0.5 if weighted_heavy else 0.95
 
 
@@ -131,8 +131,8 @@ def bunny_padded(path="../npys/bunny_zres_150_padded.npy"):
 
 
 print("Loading ground truth...")
-ground_truth = benchy_padded()
-chosen_gt = "benchy_padded"
+ground_truth = bunny_padded()
+chosen_gt = "bunny_padded"
 refraction = False
 weighted = True
 chosen_gt = chosen_gt + "_weighted" if weighted else chosen_gt
@@ -219,6 +219,14 @@ bhatt = ReconstructionTechnique(
 
 def threshold_processing_2_colors(image):
     thresh = (dh + dl) / 2
+    res = image.copy()
+    res[image < thresh] = 0
+    res[image >= thresh] = 1
+    return res
+
+
+def threshold_processing_2_colors_bis(image):
+    thresh = dh
     res = image.copy()
     res[image < thresh] = 0
     res[image >= thresh] = 1
@@ -314,7 +322,7 @@ def run():
     )
     show_projection_against_gt(
         0,
-        threshold_processing_2_colors(img),
+        threshold_processing_2_colors_bis(img),
         ground_truth,
         f"{chosen_gt} x projection",
         f"results/{chosen_gt}/x_prog_binarized.png",
@@ -329,7 +337,7 @@ def run():
     )
     show_projection_against_gt(
         1,
-        threshold_processing_2_colors(img),
+        threshold_processing_2_colors_bis(img),
         ground_truth,
         f"{chosen_gt} y projection",
         f"results/{chosen_gt}/y_prog_binarized.png",
@@ -344,7 +352,7 @@ def run():
     )
     show_projection_against_gt(
         2,
-        threshold_processing_2_colors(img),
+        threshold_processing_2_colors_bis(img),
         ground_truth,
         f"{chosen_gt} z projection",
         f"results/{chosen_gt}/z_prog_binarized.png",
