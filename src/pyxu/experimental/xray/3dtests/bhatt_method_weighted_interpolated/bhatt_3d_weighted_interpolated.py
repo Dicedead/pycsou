@@ -131,7 +131,7 @@ def bunny_padded(path="../npys/bunny_zres_150_padded.npy"):
 
 
 print("Loading ground truth...")
-ground_truth = bunny_padded()
+ground_truth = nut_padded()
 chosen_gt = "nut_padded"
 refraction = True
 weighted = True
