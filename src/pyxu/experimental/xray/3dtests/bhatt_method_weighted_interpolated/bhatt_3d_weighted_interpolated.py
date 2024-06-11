@@ -137,7 +137,7 @@ refraction = True
 weighted = True
 chosen_gt = chosen_gt + "_weighted" if weighted else chosen_gt
 chosen_gt = chosen_gt + "_refracted" if refraction else chosen_gt
-optimize_save = False
+optimize_save = True
 
 origin = 0
 pitch = np.array([1.0, 1.0, 1.0])
