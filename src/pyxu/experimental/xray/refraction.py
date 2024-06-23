@@ -193,9 +193,10 @@ def refract(
 
 
 def sine(v, w):
-    sines = np.zeros(len(v))
+    xp = pxa.get_array_module(v)
+    sines = xp.zeros(len(v))
     for i in range(len(v)):
-        sines[i] = np.sqrt(1 - (v[i] @ w[i]) ** 2)
+        sines[i] = xp.sqrt(1 - (v[i] @ w[i]) ** 2)
 
     return sines
 

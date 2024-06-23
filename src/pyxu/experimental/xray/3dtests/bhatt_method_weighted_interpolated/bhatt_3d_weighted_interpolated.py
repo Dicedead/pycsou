@@ -1,6 +1,7 @@
 import warnings
 from dataclasses import dataclass
 
+import cupy as cp
 import matplotlib.pyplot as plt
 import numpy as np
 import zarr
@@ -41,8 +42,8 @@ class BhattLossWeighted(pxa.DiffFunc):
         z_weights: bool = True,
     ):
         super().__init__(dim_shape=xrt.codim_shape, codim_shape=(1,))
-        weights = np.sqrt(ground_truth.sum(axis=(0, 1)))
-        weights = weights / np.sqrt((weights**2).sum())
+        weights = xp.sqrt(ground_truth.sum(axis=(0, 1)))
+        weights = weights / xp.sqrt((weights**2).sum())
         weights = 1 - weights
         weighting = DiagonalOp(np.ones(xrt.dim_shape) * weights) if z_weights else IdentityOp(dim_shape=xrt.dim_shape)
         fg_argshift = -dh * ground_truth
@@ -109,7 +110,7 @@ class ReconstructionTechnique:
 def ellipsis(side_a, num_a, side_b, num_b):
     side_a = side_a / 2
     side_b = side_b / 2
-    x, y = np.meshgrid(np.linspace(-side_a, side_a, num_a), np.linspace(-side_b, side_b, num_b))
+    x, y = xp.meshgrid(xp.linspace(-side_a, side_a, num_a), xp.linspace(-side_b, side_b, num_b))
     ground_truth = 1 * ((x / side_a) ** 2 + (y / side_b) ** 2 <= 1)
     return ground_truth
 
@@ -117,7 +118,7 @@ def ellipsis(side_a, num_a, side_b, num_b):
 def absorption_coeff(sides, transmittance_ratio):
     assert len(sides) == 3
     sides = pitch * sides
-    return -np.log(transmittance_ratio) * np.sum(sides) / (3 * np.prod(sides))
+    return -xp.log(transmittance_ratio) * xp.sum(sides) / (3 * xp.prod(sides))
 
 
 def benchy_padded(path="../npys/benchy_padded_150.zarr"):
@@ -133,14 +134,17 @@ def bunny_padded(path="../npys/bunny_zres_150_padded.npy"):
 
 
 print("Loading ground truth...")
-ground_truth = bunny_padded()
-chosen_gt = "bunny_padded"
-refraction = False
+ground_truth = benchy_padded()
+chosen_gt = "bency_padded"
+refraction = True
 weighted = True
-z_weights = False
+z_weights = True
+gpu = True
+xp = cp if gpu else np
 chosen_gt = chosen_gt + "_weighted" if weighted else chosen_gt
 chosen_gt = chosen_gt + "_refracted" if refraction else chosen_gt
 chosen_gt = chosen_gt + "_no_z_weights" if not z_weights else chosen_gt
+chosen_gt = chosen_gt + "_gpu" if gpu else chosen_gt
 optimize_save = True
 
 origin = 0
@@ -152,24 +156,24 @@ num_offsets = slm_pixels_width // bin_size
 
 side = np.array(ground_truth.shape)
 max_height = ground_truth.shape[-1]
-angle = np.linspace(0, 2 * np.pi, num_n, endpoint=False)
-heights = np.linspace(0.0000001, max_height, num_heights, endpoint=False)
+angle = xp.linspace(0, 2 * np.pi, num_n, endpoint=False)
+heights = xp.linspace(0.0000001, max_height, num_heights, endpoint=False)
 t_max = pitch * side / 2
 t_max = t_max[:-1]
-max_t_max = np.max(t_max)
-t_offset = np.linspace(-max_t_max, max_t_max, num_offsets, endpoint=False)
+max_t_max = xp.max(t_max)
+t_offset = xp.linspace(-max_t_max, max_t_max, num_offsets, endpoint=False)
 
-n = np.stack([np.cos(angle), np.sin(angle), np.zeros(num_n)], axis=1)
+n = xp.stack([xp.cos(angle), xp.sin(angle), xp.zeros(num_n)], axis=1)
 t = n[:, [1, 0]] * np.r_[-1, 1]  # <n, t> = 0
-t = np.tile(t, num_heights).reshape(-1, 2)
-heights = np.tile(heights, num_n).reshape(-1, 1)
-t = np.hstack([t, heights]).reshape(num_n * num_heights, 1, 3)
+t = xp.tile(t, num_heights).reshape(-1, 2)
+heights = xp.tile(heights, num_n).reshape(-1, 1)
+t = xp.hstack([t, heights]).reshape(num_n * num_heights, 1, 3)
 
-n_spec = np.broadcast_to(n.reshape(num_n, 1, 3), (num_n, num_offsets, 3))  # (N_angle, N_offset, 3)
-n_spec = np.tile(n_spec, num_heights).reshape((num_n * num_heights, num_offsets, 3))
+n_spec = xp.broadcast_to(n.reshape(num_n, 1, 3), (num_n, num_offsets, 3))  # (N_angle, N_offset, 3)
+n_spec = xp.tile(n_spec, num_heights).reshape((num_n * num_heights, num_offsets, 3))
 t_spec = t * t_offset.reshape(num_offsets, 1)
 t_spec[:, :, -1] = t[:, :, -1]
-t_spec += np.r_[pitch[:2], 0] * np.array(ground_truth.shape) / 2
+t_spec += xp.r_[pitch[:2], 0] * np.array(ground_truth.shape) / 2
 
 n_spec = n_spec.reshape(-1, 3)
 t_spec = t_spec.reshape(-1, 3)
@@ -191,7 +195,7 @@ if weighted:
     w_spec = absorption_coeff(side, transmittance_ratio) * ellipsis(
         pitch[1] * side[1], side[1], pitch[0] * side[0], side[0]
     )
-    w_spec = w_spec[:, :, np.newaxis] * np.ones(shape=(1, 1, side[-1]))
+    w_spec = w_spec[:, :, np.newaxis] * xp.ones(shape=(1, 1, side[-1]))
 
 print("Building operator...")
 xrt = (
@@ -216,7 +220,7 @@ bhatt = ReconstructionTechnique(
     ground_truth=ground_truth,
     op=xrt,
     regularizer=PositiveOrthant(xrt.codim_shape),
-    initialisation=np.zeros(xrt.codim_shape),
+    initialisation=xp.zeros(xrt.codim_shape),
     diff_lip=diff_lip,
     z_weights=z_weights,
 )
