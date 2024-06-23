@@ -141,7 +141,7 @@ z_weights = False
 chosen_gt = chosen_gt + "_weighted" if weighted else chosen_gt
 chosen_gt = chosen_gt + "_refracted" if refraction else chosen_gt
 chosen_gt = chosen_gt + "_no_z_weights" if not z_weights else chosen_gt
-optimize_save = False
+optimize_save = True
 
 origin = 0
 pitch = np.array([1.0, 1.0, 1.0])
