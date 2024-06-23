@@ -45,7 +45,7 @@ class BhattLossWeighted(pxa.DiffFunc):
         weights = xp.sqrt(ground_truth.sum(axis=(0, 1)))
         weights = weights / xp.sqrt((weights**2).sum())
         weights = 1 - weights
-        weighting = DiagonalOp(np.ones(xrt.dim_shape) * weights) if z_weights else IdentityOp(dim_shape=xrt.dim_shape)
+        weighting = DiagonalOp(xp.ones(xrt.dim_shape) * weights) if z_weights else IdentityOp(dim_shape=xrt.dim_shape)
         fg_argshift = -dh * ground_truth
         bg_argshift = -dl * (1 - ground_truth)
         fg_constant = DiagonalOp(ground_truth)
@@ -53,8 +53,8 @@ class BhattLossWeighted(pxa.DiffFunc):
         pos_orth = PositiveOrthant(dim_shape=xrt.dim_shape)
         fg_posort = pos_orth.argshift(fg_argshift).moreau_envelope(mu1)
         bg_posort = pos_orth.argshift(bg_argshift).argscale(-1).moreau_envelope(mu1)
-        nb_ones = int(np.ceil(ground_truth.shape[-1] / slm_pixels_height))
-        s = Stencil(dim_shape=xrt.dim_shape, kernel=[np.r_[1], np.r_[1], np.ones(nb_ones)], center=[0, 0, nb_ones - 1])
+        nb_ones = int(xp.ceil(ground_truth.shape[-1] / slm_pixels_height))
+        s = Stencil(dim_shape=xrt.dim_shape, kernel=[xp.r_[1], xp.r_[1], xp.ones(nb_ones)], center=[0, 0, nb_ones - 1])
         self._inner_op = (fg_posort * fg_constant + bg_posort * bg_constant) * weighting * s * xrt.T
         self._xrt = xrt
         self._reg = lambda_ * PositiveOrthant(xrt.codim_shape).moreau_envelope(mu2)
@@ -130,7 +130,7 @@ def nut_padded(path="../npys/nut_padded_150.zarr"):
 
 
 def bunny_padded(path="../npys/bunny_zres_150_padded.npy"):
-    return 1 * np.load(path)
+    return 1 * xp.load(path)
 
 
 print("Loading ground truth...")
@@ -148,15 +148,15 @@ chosen_gt = chosen_gt + "_gpu" if gpu else chosen_gt
 optimize_save = True
 
 origin = 0
-pitch = np.array([1.0, 1.0, 1.0])
+pitch = xp.array([1.0, 1.0, 1.0])
 
 print("Creating rays...")
 num_heights = slm_pixels_height // bin_size
 num_offsets = slm_pixels_width // bin_size
 
-side = np.array(ground_truth.shape)
+side = xp.array(ground_truth.shape)
 max_height = ground_truth.shape[-1]
-angle = xp.linspace(0, 2 * np.pi, num_n, endpoint=False)
+angle = xp.linspace(0, 2 * xp.pi, num_n, endpoint=False)
 heights = xp.linspace(0.0000001, max_height, num_heights, endpoint=False)
 t_max = pitch * side / 2
 t_max = t_max[:-1]
@@ -164,7 +164,7 @@ max_t_max = xp.max(t_max)
 t_offset = xp.linspace(-max_t_max, max_t_max, num_offsets, endpoint=False)
 
 n = xp.stack([xp.cos(angle), xp.sin(angle), xp.zeros(num_n)], axis=1)
-t = n[:, [1, 0]] * np.r_[-1, 1]  # <n, t> = 0
+t = n[:, [1, 0]] * xp.r_[-1, 1]  # <n, t> = 0
 t = xp.tile(t, num_heights).reshape(-1, 2)
 heights = xp.tile(heights, num_n).reshape(-1, 1)
 t = xp.hstack([t, heights]).reshape(num_n * num_heights, 1, 3)
@@ -173,7 +173,7 @@ n_spec = xp.broadcast_to(n.reshape(num_n, 1, 3), (num_n, num_offsets, 3))  # (N_
 n_spec = xp.tile(n_spec, num_heights).reshape((num_n * num_heights, num_offsets, 3))
 t_spec = t * t_offset.reshape(num_offsets, 1)
 t_spec[:, :, -1] = t[:, :, -1]
-t_spec += xp.r_[pitch[:2], 0] * np.array(ground_truth.shape) / 2
+t_spec += xp.r_[pitch[:2], 0] * xp.array(ground_truth.shape) / 2
 
 n_spec = n_spec.reshape(-1, 3)
 t_spec = t_spec.reshape(-1, 3)
@@ -187,15 +187,15 @@ if refraction:
     t_spec -= 3 * external_diameter * n_spec
 
     n_spec, t_spec = refract(n_spec.reshape(-1, 3), t_spec.reshape(-1, 3), r_spec, c_spec)
-    n_spec = n_spec[~np.isnan(n_spec.sum(axis=-1))]
-    t_spec = t_spec[~np.isnan(t_spec.sum(axis=-1))]
+    n_spec = n_spec[~xp.isnan(n_spec.sum(axis=-1))]
+    t_spec = t_spec[~xp.isnan(t_spec.sum(axis=-1))]
     n_spec = normalize(n_spec)
 
 if weighted:
     w_spec = absorption_coeff(side, transmittance_ratio) * ellipsis(
         pitch[1] * side[1], side[1], pitch[0] * side[0], side[0]
     )
-    w_spec = w_spec[:, :, np.newaxis] * xp.ones(shape=(1, 1, side[-1]))
+    w_spec = w_spec[:, :, xp.newaxis] * xp.ones(shape=(1, 1, side[-1]))
 
 print("Building operator...")
 xrt = (
@@ -298,15 +298,15 @@ def show_projection_against_gt(ax, data, ground_truth, main_title, file_title, p
     plt.close(fig)
 
 
-def zero_order_interp(img: np.ndarray, epsilon=1e-6):
+def zero_order_interp(img: xp.ndarray, epsilon=1e-6):
     output = img.copy()
-    nonzero_planes = np.argwhere(img.sum(axis=(0, 1)) > epsilon).flatten()
+    nonzero_planes = xp.argwhere(img.sum(axis=(0, 1)) > epsilon).flatten()
     nonzero_length = len(nonzero_planes) - 1
     idx = 0
     while idx < nonzero_length:
         z = nonzero_planes[idx]
         z_plus_1 = nonzero_planes[idx + 1]
-        output[:, :, z:z_plus_1] = output[:, :, z, np.newaxis]
+        output[:, :, z:z_plus_1] = output[:, :, z, xp.newaxis]
         idx += 1
 
     return output, nonzero_planes
