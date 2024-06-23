@@ -10,7 +10,7 @@ import pyxu.info.ptype as pxt
 import pyxu.operator.linop.xrt.ray as xray
 from pyxu.abc import ProxFunc
 from pyxu.experimental.xray.refraction import normalize, refract
-from pyxu.operator import DiagonalOp, PositiveOrthant
+from pyxu.operator import DiagonalOp, IdentityOp, PositiveOrthant
 from pyxu.operator.linop.stencil.stencil import Stencil
 from pyxu.opt.solver import PGD
 from pyxu.opt.stop import MaxIter, RelError
@@ -38,12 +38,13 @@ class BhattLossWeighted(pxa.DiffFunc):
         mu2: pxt.Real,
         dh: pxt.Real = dh,
         dl: pxt.Real = dl,
+        z_weights: bool = True,
     ):
         super().__init__(dim_shape=xrt.codim_shape, codim_shape=(1,))
         weights = np.sqrt(ground_truth.sum(axis=(0, 1)))
         weights = weights / np.sqrt((weights**2).sum())
         weights = 1 - weights
-        weighting = DiagonalOp(np.ones(xrt.dim_shape) * weights)
+        weighting = DiagonalOp(np.ones(xrt.dim_shape) * weights) if z_weights else IdentityOp(dim_shape=xrt.dim_shape)
         fg_argshift = -dh * ground_truth
         bg_argshift = -dl * (1 - ground_truth)
         fg_constant = DiagonalOp(ground_truth)
@@ -71,6 +72,7 @@ class ReconstructionTechnique:
     regularizer: ProxFunc
     initialisation: pxt.NDArray
     diff_lip: float
+    z_weights: bool
 
     def run(self, stop_crit=RelError(eps=1e-3) | MaxIter(200), post_process_optres=None, mu1=10, mu2=10):
         print("########### First epoch")
@@ -97,7 +99,7 @@ class ReconstructionTechnique:
         return alpha_copy, self.op.adjoint(alpha)
 
     def __run_epoch(self, x0: pxt.NDArray, mu1: pxt.Real, mu2: pxt.Real, stop_crit: pxa.StoppingCriterion):
-        loss = BhattLossWeighted(self.op, self.ground_truth, mu1=mu1, mu2=mu2)
+        loss = BhattLossWeighted(self.op, self.ground_truth, mu1=mu1, mu2=mu2, z_weights=z_weights)
         pgd = PGD(loss)
         pgd.fit(x0=x0, stop_crit=stop_crit, track_objective=True, tau=1 / self.diff_lip)
         alpha, _ = pgd.stats()
@@ -131,13 +133,15 @@ def bunny_padded(path="../npys/bunny_zres_150_padded.npy"):
 
 
 print("Loading ground truth...")
-ground_truth = nut_padded()
-chosen_gt = "nut_padded"
-refraction = True
+ground_truth = bunny_padded()
+chosen_gt = "bunny_padded"
+refraction = False
 weighted = True
+z_weights = False
 chosen_gt = chosen_gt + "_weighted" if weighted else chosen_gt
 chosen_gt = chosen_gt + "_refracted" if refraction else chosen_gt
-optimize_save = True
+chosen_gt = chosen_gt + "_no_z_weights" if not z_weights else chosen_gt
+optimize_save = False
 
 origin = 0
 pitch = np.array([1.0, 1.0, 1.0])
@@ -214,6 +218,7 @@ bhatt = ReconstructionTechnique(
     regularizer=PositiveOrthant(xrt.codim_shape),
     initialisation=np.zeros(xrt.codim_shape),
     diff_lip=diff_lip,
+    z_weights=z_weights,
 )
 
 
