@@ -328,7 +328,7 @@ def run():
 
     if optimize_save:
         alpha, img, hist = bhatt.run()
-        zarr.save(save_file, alpha)
+        zarr.save(save_file, alpha if not gpu else alpha.get())
         zarr.save(hist_file, hist)
 
     alpha = zarr.load(save_file)
