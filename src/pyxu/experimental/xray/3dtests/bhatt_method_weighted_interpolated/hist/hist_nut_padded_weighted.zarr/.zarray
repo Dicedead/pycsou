@@ -1,0 +1,37 @@
+{
+    "chunks": [
+        357
+    ],
+    "compressor": {
+        "blocksize": 0,
+        "clevel": 5,
+        "cname": "lz4",
+        "id": "blosc",
+        "shuffle": 1
+    },
+    "dtype": [
+        [
+            "iteration",
+            "<i8"
+        ],
+        [
+            "RelError[x]",
+            "<f8"
+        ],
+        [
+            "N_iter",
+            "<f8"
+        ],
+        [
+            "Memorize[objective_func]",
+            "<f8"
+        ]
+    ],
+    "fill_value": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+    "filters": null,
+    "order": "C",
+    "shape": [
+        357
+    ],
+    "zarr_format": 2
+}
