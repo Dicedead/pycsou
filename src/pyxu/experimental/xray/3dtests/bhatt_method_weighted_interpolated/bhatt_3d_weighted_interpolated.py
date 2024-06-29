@@ -324,6 +324,8 @@ def plot_opt_history(hist, hist_file_title):
 
 
 def run():
+    global ground_truth
+
     save_file = f"alphas/alpha_{chosen_gt}.zarr"
     hist_file = f"hist/hist_{chosen_gt}.zarr"
 
@@ -333,6 +335,7 @@ def run():
         if gpu:
             alpha = alpha.get()
             img = img.get()
+            ground_truth = ground_truth.get()
 
         zarr.save(save_file, alpha)
         zarr.save(hist_file, hist)
