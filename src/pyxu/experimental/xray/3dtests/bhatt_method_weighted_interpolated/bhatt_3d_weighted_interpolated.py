@@ -110,7 +110,7 @@ class ReconstructionTechnique:
 def ellipsis(side_a, num_a, side_b, num_b):
     side_a = side_a / 2
     side_b = side_b / 2
-    x, y = xp.meshgrid(xp.linspace(-side_a, side_a, num_a), xp.linspace(-side_b, side_b, num_b))
+    x, y = xp.meshgrid((xp.linspace(-side_a, side_a, num_a), xp.linspace(-side_b, side_b, num_b)))
     ground_truth = 1 * ((x / side_a) ** 2 + (y / side_b) ** 2 <= 1)
     return ground_truth
 
