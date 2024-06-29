@@ -110,7 +110,7 @@ class ReconstructionTechnique:
 def ellipsis(side_a, num_a, side_b, num_b):
     side_a = side_a / 2
     side_b = side_b / 2
-    x, y = xp.meshgrid((xp.linspace(-side_a, side_a, num_a), xp.linspace(-side_b, side_b, num_b)))
+    x, y = xp.meshgrid(xp.linspace(-side_a, side_a, num_a), xp.linspace(-side_b, side_b, num_b))
     ground_truth = 1 * ((x / side_a) ** 2 + (y / side_b) ** 2 <= 1)
     return ground_truth
 
@@ -193,7 +193,7 @@ if refraction:
 
 if weighted:
     w_spec = absorption_coeff(side, transmittance_ratio) * ellipsis(
-        pitch[1] * side[1], side[1], pitch[0] * side[0], side[0]
+        int(pitch[1] * side[1]), int(side[1]), int(pitch[0] * side[0]), int(side[0])
     )
     w_spec = w_spec[:, :, xp.newaxis] * xp.ones(shape=(1, 1, side[-1]))
 
