@@ -140,17 +140,18 @@ def bunny_padded(path="../npys/bunny_zres_150_padded.npy"):
 print("Loading ground truth...")
 ground_truth = benchy_padded()
 chosen_gt = "benchy_padded"
+optimize_save = True
 refraction = True
 weighted = True
 z_weights = True
 gpu = True
+gpu = gpu and optimize_save
 xp = cp if gpu else np
 ground_truth = ground_truth if not gpu else cp.array(ground_truth)
 chosen_gt = chosen_gt + "_weighted" if weighted else chosen_gt
 chosen_gt = chosen_gt + "_refracted" if refraction else chosen_gt
 chosen_gt = chosen_gt + "_no_z_weights" if not z_weights else chosen_gt
 chosen_gt = chosen_gt + "_gpu" if gpu else chosen_gt
-optimize_save = True
 
 origin = 0
 pitch = xp.array([1.0, 1.0, 1.0])
@@ -330,10 +331,10 @@ def run():
         alpha, img, hist = bhatt.run()
         zarr.save(save_file, alpha if not gpu else alpha.get())
         zarr.save(hist_file, hist)
-
-    alpha = zarr.load(save_file)
-    hist = zarr.load(hist_file)
-    img = bhatt.op.adjoint(alpha.clip(0, None))
+    else:
+        alpha = zarr.load(save_file)
+        hist = zarr.load(hist_file)
+        img = bhatt.op.adjoint(alpha.clip(0, None))
 
     img, nonzero_planes = zero_order_interp(img)
 
