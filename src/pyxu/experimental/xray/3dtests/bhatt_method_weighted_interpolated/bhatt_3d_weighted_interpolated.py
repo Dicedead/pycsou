@@ -138,15 +138,15 @@ def bunny_padded(path="../npys/bunny_zres_150_padded.npy"):
 
 
 print("Loading ground truth...")
-optimize_save = False
+optimize_save = True
 refraction = False
 weighted = True
 z_weights = True
 gpu = True
 gpu = gpu and optimize_save
 xp = cp if gpu else np
-ground_truth = nut_padded()
-chosen_gt = "nut_padded"
+ground_truth = benchy_padded()
+chosen_gt = "benchy_padded"
 ground_truth = ground_truth if not gpu else cp.array(ground_truth)
 chosen_gt = chosen_gt + "_weighted" if weighted else chosen_gt
 chosen_gt = chosen_gt + "_refracted" if refraction else chosen_gt
