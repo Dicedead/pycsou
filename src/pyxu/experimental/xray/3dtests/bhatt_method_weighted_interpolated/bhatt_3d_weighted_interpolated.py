@@ -141,6 +141,7 @@ weighted = True
 z_weights = True
 gpu = True
 xp = cp if gpu else np
+ground_truth = ground_truth if not gpu else cp.array(ground_truth)
 chosen_gt = chosen_gt + "_weighted" if weighted else chosen_gt
 chosen_gt = chosen_gt + "_refracted" if refraction else chosen_gt
 chosen_gt = chosen_gt + "_no_z_weights" if not z_weights else chosen_gt
