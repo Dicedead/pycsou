@@ -108,7 +108,7 @@ class ReconstructionTechnique:
         pgd = PGD(loss)
         pgd.fit(x0=x0, stop_crit=stop_crit, track_objective=True, tau=1 / self.diff_lip)
         alpha, hist = pgd.stats()
-        return alpha["x"] if not gpu else cp.array(alpha["x"]), hist
+        return alpha["x"], hist
 
 
 def ellipsis(side_a, num_a, side_b, num_b):
@@ -151,7 +151,7 @@ ground_truth = ground_truth if not gpu else cp.array(ground_truth)
 chosen_gt = chosen_gt + "_weighted" if weighted else chosen_gt
 chosen_gt = chosen_gt + "_refracted" if refraction else chosen_gt
 chosen_gt = chosen_gt + "_no_z_weights" if not z_weights else chosen_gt
-chosen_gt = chosen_gt + "_gpu" if gpu else chosen_gt
+# chosen_gt = chosen_gt + "_gpu" if gpu else chosen_gt
 
 origin = 0
 pitch = xp.array([1.0, 1.0, 1.0])
