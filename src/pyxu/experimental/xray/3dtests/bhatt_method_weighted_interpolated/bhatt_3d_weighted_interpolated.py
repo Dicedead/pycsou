@@ -18,8 +18,8 @@ from pyxu.opt.stop import MaxIter, RelError
 
 warnings.filterwarnings("ignore")
 
-dh = 0.9
-dl = 0.5
+dh = 0.95
+dl = 0.9
 num_n = 1500  # 3000
 bin_size = 1
 slm_pixels_height = 50  # 100
@@ -75,21 +75,25 @@ class ReconstructionTechnique:
     diff_lip: float
     z_weights: bool
 
-    def run(self, stop_crit=RelError(eps=1e-3) | MaxIter(200), post_process_optres=None, mu1=10, mu2=10):
+    def run(self, stop_crit=RelError(eps=1e-3) | MaxIter(200), post_process_optres=None, mu1=10, mu2=10, n_iter=2):
         print("########### First epoch")
-        alpha = self.__run_epoch(self.initialisation, mu1=mu1, mu2=mu2, stop_crit=RelError(eps=1e-3) | MaxIter(50))
+        alpha, hist1 = self.__run_epoch(
+            self.initialisation, mu1=mu1, mu2=mu2, stop_crit=RelError(eps=1e-3) | MaxIter(n_iter)
+        )
         print("########### Second epoch")
-        alpha = self.__run_epoch(alpha, mu1=mu1 / 2, mu2=mu2, stop_crit=RelError(eps=1e-3) | MaxIter(50))
+        alpha, hist2 = self.__run_epoch(alpha, mu1=mu1 / 2, mu2=mu2, stop_crit=RelError(eps=1e-3) | MaxIter(n_iter))
         print("########### Third epoch")
-        alpha = self.__run_epoch(alpha, mu1=mu1 / 2, mu2=mu2 / 2, stop_crit=RelError(eps=1e-3) | MaxIter(50))
+        alpha, hist3 = self.__run_epoch(alpha, mu1=mu1 / 2, mu2=mu2 / 2, stop_crit=RelError(eps=1e-3) | MaxIter(n_iter))
         print("########### Fourth epoch")
-        alpha = self.__run_epoch(alpha, mu1=mu1 / 4, mu2=mu2 / 2, stop_crit=RelError(eps=1e-5) | MaxIter(50))
+        alpha, hist4 = self.__run_epoch(alpha, mu1=mu1 / 4, mu2=mu2 / 2, stop_crit=RelError(eps=1e-5) | MaxIter(n_iter))
         print("########### Fifth epoch")
-        alpha = self.__run_epoch(alpha, mu1=mu1 / 4, mu2=mu2 / 4, stop_crit=RelError(eps=1e-5) | MaxIter(50))
+        alpha, hist5 = self.__run_epoch(alpha, mu1=mu1 / 4, mu2=mu2 / 4, stop_crit=RelError(eps=1e-5) | MaxIter(n_iter))
         print("########### Sixth epoch")
-        alpha = self.__run_epoch(alpha, mu1=mu1 / 8, mu2=mu2 / 4, stop_crit=RelError(eps=5e-6) | MaxIter(50))
+        alpha, hist6 = self.__run_epoch(alpha, mu1=mu1 / 8, mu2=mu2 / 4, stop_crit=RelError(eps=5e-6) | MaxIter(n_iter))
         print("########### Last epoch")
-        alpha = self.__run_epoch(alpha, mu1=mu1 / 8, mu2=mu2 / 8, stop_crit=RelError(eps=5e-6) | MaxIter(50))
+        alpha, hist7 = self.__run_epoch(alpha, mu1=mu1 / 8, mu2=mu2 / 8, stop_crit=RelError(eps=5e-6) | MaxIter(n_iter))
+
+        hist = np.concatenate([hist1, hist2, hist3, hist4, hist5, hist6, hist7])
 
         alpha_copy = alpha.copy()
 
@@ -97,14 +101,14 @@ class ReconstructionTechnique:
             alpha = post_process_optres(alpha)
 
         alpha = alpha.clip(0, None)
-        return alpha_copy, self.op.adjoint(alpha)
+        return alpha_copy, self.op.adjoint(alpha), hist
 
     def __run_epoch(self, x0: pxt.NDArray, mu1: pxt.Real, mu2: pxt.Real, stop_crit: pxa.StoppingCriterion):
         loss = BhattLossWeighted(self.op, self.ground_truth, mu1=mu1, mu2=mu2, z_weights=z_weights)
         pgd = PGD(loss)
         pgd.fit(x0=x0, stop_crit=stop_crit, track_objective=True, tau=1 / self.diff_lip)
-        alpha, _ = pgd.stats()
-        return alpha["x"]
+        alpha, hist = pgd.stats()
+        return alpha["x"], hist
 
 
 def ellipsis(side_a, num_a, side_b, num_b):
@@ -313,14 +317,23 @@ def zero_order_interp(img: xp.ndarray, epsilon=1e-6):
     return output, nonzero_planes
 
 
+def plot_opt_history(hist, hist_file_title):
+    fig = plt.plot(hist)
+    fig.savefig(hist_file_title, dpi=500)
+
+
 def run():
     save_file = f"alphas/alpha_{chosen_gt}.zarr"
+    hist_file = f"hist/hist_{chosen_gt}.zarr"
+
     if optimize_save:
-        alpha, img = bhatt.run()
+        alpha, img, hist = bhatt.run()
         zarr.save(save_file, alpha)
-    else:
-        alpha = zarr.load(save_file)
-        img = bhatt.op.adjoint(alpha.clip(0, None))
+        zarr.save(hist_file, hist)
+
+    alpha = zarr.load(save_file)
+    hist = zarr.load(hist_file)
+    img = bhatt.op.adjoint(alpha.clip(0, None))
 
     img, nonzero_planes = zero_order_interp(img)
 
@@ -402,6 +415,9 @@ def run():
         main_title=f"{chosen_gt} slices",
         file_title=f"results/{chosen_gt}/slices_energy.png",
     )
+
+    hist_file_title = f"results/{chosen_gt}/history.png"
+    plot_opt_history(hist, hist_file_title)
 
 
 if __name__ == "__main__":
