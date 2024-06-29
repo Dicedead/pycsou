@@ -195,7 +195,7 @@ if weighted:
     w_spec = absorption_coeff(side, transmittance_ratio) * ellipsis(
         int(pitch[1] * side[1]), int(side[1]), int(pitch[0] * side[0]), int(side[0])
     )
-    w_spec = w_spec[:, :, xp.newaxis] * xp.ones(shape=(1, 1, side[-1]))
+    w_spec = w_spec[:, :, xp.newaxis] * xp.ones(shape=(1, 1, int(side[-1])))
 
 print("Building operator...")
 xrt = (
