@@ -140,8 +140,8 @@ def bunny_padded(path="../npys/bunny_zres_150_padded.npy"):
 print("Loading ground truth...")
 optimize_save = True
 refraction = False
-weighted = False
-z_weights = True
+weighted = True
+z_weights = False
 gpu = True
 gpu = gpu and optimize_save
 xp = cp if gpu else np
