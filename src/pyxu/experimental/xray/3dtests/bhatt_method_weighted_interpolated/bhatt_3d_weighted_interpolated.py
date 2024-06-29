@@ -319,8 +319,8 @@ def zero_order_interp(img: xp.ndarray, epsilon=1e-6):
 
 
 def plot_opt_history(hist, hist_file_title):
-    fig, ax = plt.plot(hist["Memorize[objective_func]"])
-    fig.savefig(hist_file_title, dpi=500)
+    plt.plot(hist["Memorize[objective_func]"])
+    plt.savefig(hist_file_title, dpi=500)
 
 
 def run():
