@@ -75,7 +75,7 @@ class ReconstructionTechnique:
     diff_lip: float
     z_weights: bool
 
-    def run(self, stop_crit=RelError(eps=1e-3) | MaxIter(200), post_process_optres=None, mu1=10, mu2=10, n_iter=2):
+    def run(self, stop_crit=RelError(eps=1e-3) | MaxIter(200), post_process_optres=None, mu1=10, mu2=10, n_iter=50):
         print("########### First epoch")
         alpha, hist1 = self.__run_epoch(
             self.initialisation, mu1=mu1, mu2=mu2, stop_crit=RelError(eps=1e-3) | MaxIter(n_iter)
