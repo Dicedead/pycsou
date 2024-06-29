@@ -108,7 +108,7 @@ class ReconstructionTechnique:
         pgd = PGD(loss)
         pgd.fit(x0=x0, stop_crit=stop_crit, track_objective=True, tau=1 / self.diff_lip)
         alpha, hist = pgd.stats()
-        return alpha["x"], hist
+        return alpha["x"] if not gpu else cp.array(alpha["x"]), hist
 
 
 def ellipsis(side_a, num_a, side_b, num_b):
@@ -306,7 +306,7 @@ def show_projection_against_gt(ax, data, ground_truth, main_title, file_title, p
 
 def zero_order_interp(img: xp.ndarray, epsilon=1e-6):
     output = img.copy()
-    nonzero_planes = xp.argwhere(img.sum(axis=(0, 1)) > epsilon).flatten()
+    nonzero_planes = np.argwhere(img.sum(axis=(0, 1)) > epsilon).flatten()
     nonzero_length = len(nonzero_planes) - 1
     idx = 0
     while idx < nonzero_length:
