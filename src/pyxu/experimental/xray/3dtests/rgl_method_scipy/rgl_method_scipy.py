@@ -93,13 +93,13 @@ class ReconstructionTechnique:
         x0_init_size = x0.shape
         x0 = x0.flatten()
         loss = BhattLossWeighted(self.op, self.ground_truth, mu1=mu1, mu2=mu2, z_weights=z_weights)
-        hist = []
+        hist = np.r_[0.0]
         res = sp.optimize.minimize(
             fun=loss,
             x0=x0,
             jac=loss.grad,
             method="L-BFGS-B",
-            options={"maxiter": 75, "iprint": 1},
+            options={"maxiter": 40, "iprint": 1},
         )
         return res.x.reshape(x0_init_size), hist
 
