@@ -99,7 +99,7 @@ class ReconstructionTechnique:
             x0=x0,
             jac=loss.grad,
             method="L-BFGS-B",
-            options={"maxiter": 75, "disp": lambda x: hist.append(x)},
+            options={"maxiter": 75, "iprint": 1},
         )
         return res.x.reshape(x0_init_size), hist
 
