@@ -99,7 +99,7 @@ class ReconstructionTechnique:
             x0=x0,
             jac=loss.grad,
             method="L-BFGS-B",
-            options={"maxiter": 40, "iprint": 1},
+            options={"maxiter": 100, "iprint": 1},
         )
         hist = {"Memorize[objective_func]": hist}
         return res.x.reshape(x0_init_size), hist
@@ -132,7 +132,7 @@ def bunny_padded(path="../npys/bunny_zres_150_padded.npy"):
 
 
 print("Loading ground truth...")
-optimize_save = False
+optimize_save = True
 refraction = True
 weighted = True
 z_weights = True
