@@ -76,10 +76,22 @@ class ReconstructionTechnique:
     z_weights: bool
 
     def run(self, stop_crit=RelError(eps=1e-3) | MaxIter(200), post_process_optres=None, mu1=10, mu2=10, n_iter=50):
-        print("########### First and last epoch")
-        alpha, hist = self.__run_epoch(
+        print("########### First epoch")
+        alpha, hist1 = self.__run_epoch(
             self.initialisation, mu1=mu1, mu2=mu2, stop_crit=RelError(eps=1e-3) | MaxIter(n_iter)
         )
+        print("########### Second epoch")
+        alpha, hist2 = self.__run_epoch(alpha, mu1=mu1 / 2, mu2=mu2, stop_crit=RelError(eps=1e-3) | MaxIter(n_iter))
+        print("########### Third epoch")
+        alpha, hist3 = self.__run_epoch(alpha, mu1=mu1 / 2, mu2=mu2 / 2, stop_crit=RelError(eps=1e-3) | MaxIter(n_iter))
+        print("########### Fourth epoch")
+        alpha, hist4 = self.__run_epoch(alpha, mu1=mu1 / 4, mu2=mu2 / 2, stop_crit=RelError(eps=1e-5) | MaxIter(n_iter))
+        print("########### Fifth epoch")
+        alpha, hist5 = self.__run_epoch(alpha, mu1=mu1 / 4, mu2=mu2 / 4, stop_crit=RelError(eps=1e-5) | MaxIter(n_iter))
+        print("########### Sixth epoch")
+        alpha, hist6 = self.__run_epoch(alpha, mu1=mu1 / 8, mu2=mu2 / 4, stop_crit=RelError(eps=5e-6) | MaxIter(n_iter))
+        print("########### Last epoch")
+        alpha, hist7 = self.__run_epoch(alpha, mu1=mu1 / 8, mu2=mu2 / 8, stop_crit=RelError(eps=5e-6) | MaxIter(n_iter))
 
         alpha_copy = alpha.copy()
 
@@ -87,7 +99,7 @@ class ReconstructionTechnique:
             alpha = post_process_optres(alpha)
 
         alpha = alpha.clip(0, None)
-        return alpha_copy, self.op.adjoint(alpha), hist
+        return alpha_copy, self.op.adjoint(alpha), hist7
 
     def __run_epoch(self, x0: pxt.NDArray, mu1: pxt.Real, mu2: pxt.Real, stop_crit: pxa.StoppingCriterion):
         x0_init_size = x0.shape
@@ -99,7 +111,7 @@ class ReconstructionTechnique:
             x0=x0,
             jac=loss.grad,
             method="L-BFGS-B",
-            options={"maxiter": 100, "iprint": 1},
+            options={"maxiter": 40, "iprint": 1},
         )
         hist = {"Memorize[objective_func]": hist}
         return res.x.reshape(x0_init_size), hist
