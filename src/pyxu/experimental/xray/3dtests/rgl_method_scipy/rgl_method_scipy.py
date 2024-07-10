@@ -94,7 +94,7 @@ class ReconstructionTechnique:
         x0 = x0.flatten()
         loss = BhattLossWeighted(self.op, self.ground_truth, mu1=mu1, mu2=mu2, z_weights=z_weights)
         hist = []
-        res = sp.optimize(
+        res = sp.optimize.minimize(
             fun=loss, x0=x0, jac=loss.grad, method="L-BFGS-B", options={"maxiter": 75}, disp=lambda x: hist.append(x)
         )
         return res.x.reshape(x0_init_size), hist
