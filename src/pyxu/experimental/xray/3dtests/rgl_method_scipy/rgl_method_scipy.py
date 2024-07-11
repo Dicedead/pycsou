@@ -99,7 +99,7 @@ class ReconstructionTechnique:
             alpha = post_process_optres(alpha)
 
         alpha = alpha.clip(0, None)
-        return alpha_copy, self.op.adjoint(alpha), hist7
+        return alpha_copy, self.op.adjoint(alpha), hist1
 
     def __run_epoch(self, x0: pxt.NDArray, mu1: pxt.Real, mu2: pxt.Real, stop_crit: pxa.StoppingCriterion):
         x0_init_size = x0.shape
@@ -109,7 +109,7 @@ class ReconstructionTechnique:
         res = sp.optimize.minimize(
             fun=loss,
             x0=x0,
-            jac=loss.grad,
+            jac=lambda x: (2 / diff_lip) * loss.grad(x),
             method="L-BFGS-B",
             options={"maxiter": 40, "iprint": 1},
         )
