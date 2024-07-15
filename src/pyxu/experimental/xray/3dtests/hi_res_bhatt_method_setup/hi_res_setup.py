@@ -4,7 +4,6 @@ from dataclasses import dataclass
 import cupy as cp
 import matplotlib.pyplot as plt
 import numpy as np
-import scipy as sp
 import zarr
 
 import pyxu.abc as pxa
@@ -14,16 +13,17 @@ from pyxu.abc import ProxFunc
 from pyxu.experimental.xray.refraction import normalize, refract
 from pyxu.operator import DiagonalOp, IdentityOp, PositiveOrthant
 from pyxu.operator.linop.stencil.stencil import Stencil
+from pyxu.opt.solver import PGD
 from pyxu.opt.stop import MaxIter, RelError
 
 warnings.filterwarnings("ignore")
 
 dh = 0.95
 dl = 0.9
-num_n = 1500  # 3000
+num_n = 1000
 bin_size = 1
-slm_pixels_height = 50  # 100
-slm_pixels_width = 100  # 200
+slm_pixels_height = 512
+slm_pixels_width = 512
 lambda_ = 40
 diff_lip = 500_000
 weighted_heavy = True
@@ -93,29 +93,22 @@ class ReconstructionTechnique:
         print("########### Last epoch")
         alpha, hist7 = self.__run_epoch(alpha, mu1=mu1 / 8, mu2=mu2 / 8, stop_crit=RelError(eps=5e-6) | MaxIter(n_iter))
 
+        hist = np.concatenate([hist1, hist2, hist3, hist4, hist5, hist6, hist7])
+
         alpha_copy = alpha.copy()
 
         if post_process_optres is not None:
             alpha = post_process_optres(alpha)
 
         alpha = alpha.clip(0, None)
-        return alpha_copy, self.op.adjoint(alpha), hist1
+        return alpha_copy, self.op.adjoint(alpha), hist
 
     def __run_epoch(self, x0: pxt.NDArray, mu1: pxt.Real, mu2: pxt.Real, stop_crit: pxa.StoppingCriterion):
-        x0_init_size = x0.shape
-        x0 = x0.flatten()
         loss = BhattLossWeighted(self.op, self.ground_truth, mu1=mu1, mu2=mu2, z_weights=z_weights)
-        hist = np.r_[0.0]
-        res = sp.optimize.minimize(
-            fun=loss,
-            x0=x0,
-            jac=loss.grad,
-            method="L-BFGS-B",
-            options={"maxiter": 40, "iprint": 1},
-        )
-
-        hist = {"Memorize[objective_func]": hist}
-        return res.x.reshape(x0_init_size), hist
+        pgd = PGD(loss)
+        pgd.fit(x0=x0, stop_crit=stop_crit, track_objective=True, tau=1 / self.diff_lip)
+        alpha, hist = pgd.stats()
+        return alpha["x"], hist
 
 
 def ellipsis(side_a, num_a, side_b, num_b):
@@ -132,7 +125,7 @@ def absorption_coeff(sides, transmittance_ratio):
     return -xp.log(transmittance_ratio) * xp.sum(sides) / (3 * xp.prod(sides))
 
 
-def benchy_padded(path="../npys/benchy_padded_150.zarr"):
+def benchy_padded_hi_res(path="../npys/benchy_padded_512.zarr"):
     return 1 * zarr.load(path)
 
 
@@ -146,14 +139,14 @@ def bunny_padded(path="../npys/bunny_zres_150_padded.npy"):
 
 print("Loading ground truth...")
 optimize_save = True
-refraction = True
+refraction = False
 weighted = True
 z_weights = True
-gpu = False
+gpu = True
 gpu = gpu and optimize_save
 xp = cp if gpu else np
-ground_truth = bunny_padded()
-chosen_gt = "bunny_padded"
+ground_truth = benchy_padded_hi_res()
+chosen_gt = "benchy_padded_hi_res"
 ground_truth = ground_truth if not gpu else cp.array(ground_truth)
 chosen_gt = chosen_gt + "_weighted" if weighted else chosen_gt
 chosen_gt = chosen_gt + "_refracted" if refraction else chosen_gt
@@ -191,7 +184,8 @@ n_spec = n_spec.reshape(-1, 3)
 t_spec = t_spec.reshape(-1, 3)
 
 if refraction:
-    external_diameter = 5 * 2 * max(side[0], side[1]) + 10
+    object_diameter = 2 * max(side[0], side[1])
+    external_diameter = 2.5 * object_diameter  # object diam = 40% external diam
 
     c_spec = [1, external_diameter, 0, side[-1], 0, side[-1]]
     r_spec = [1, 1.4, 1.45]
