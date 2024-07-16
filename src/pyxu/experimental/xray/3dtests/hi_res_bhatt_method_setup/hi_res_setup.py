@@ -138,7 +138,7 @@ def bunny_padded(path="../npys/bunny_zres_150_padded.npy"):
 
 
 print("Loading ground truth...")
-optimize_save = True
+optimize_save = False
 refraction = False
 weighted = True
 z_weights = True
