@@ -11,7 +11,8 @@ import pyxu.info.ptype as pxt
 import pyxu.operator.linop.xrt.ray as xray
 from pyxu.abc import ProxFunc
 from pyxu.experimental.xray.refraction import normalize, refract
-from pyxu.operator import DiagonalOp, IdentityOp, L1Norm, PositiveOrthant
+from pyxu.operator import (DiagonalOp, Gradient, IdentityOp, L1Norm,
+                           PositiveOrthant)
 from pyxu.operator.linop.stencil.stencil import Stencil
 from pyxu.opt.solver import PGD
 from pyxu.opt.stop import MaxIter, RelError
@@ -106,7 +107,8 @@ class ReconstructionTechnique:
 
     def __run_epoch(self, x0: pxt.NDArray, mu1: pxt.Real, mu2: pxt.Real, stop_crit: pxa.StoppingCriterion):
         loss = BhattLossWeighted(self.op, self.ground_truth, mu1=mu1, mu2=mu2, z_weights=z_weights)
-        tvnorm = lambda_2 * L1Norm(loss.jacobian.codim_shape) * loss.jacobian
+        grad = Gradient(dim_shape=loss.dim_shape, gpu=gpu)
+        tvnorm = lambda_2 * L1Norm(loss.codim_shape) * grad
         pgd = PGD(loss, tvnorm)
         pgd.fit(x0=x0, stop_crit=stop_crit, track_objective=True, tau=1 / self.diff_lip)
         alpha, hist = pgd.stats()
